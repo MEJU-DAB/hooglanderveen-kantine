@@ -14,6 +14,86 @@ import { Bericht } from '@/lib/types';
 import { splitContent, stripTags } from '@/lib/splitContent';
 import { AutoFitSlide } from '@/components/AutoFitSlide';
 
+/* ── SVG Icons (Heroicons outline stijl) ── */
+const Icons = {
+  document: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+  ),
+  eye: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+    </svg>
+  ),
+  megaphone: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+    </svg>
+  ),
+  eyeOff: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+    </svg>
+  ),
+  list: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+    </svg>
+  ),
+  rss: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16"/>
+      <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  monitor: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2"/>
+      <path d="M8 21h8M12 17v4"/>
+    </svg>
+  ),
+  search: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+    </svg>
+  ),
+  inbox: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/>
+    </svg>
+  ),
+  externalLink: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+      <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+    </svg>
+  ),
+  pencil: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  ),
+  trash: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+    </svg>
+  ),
+  plus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  ),
+  refresh: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+    </svg>
+  ),
+};
+
 /* ── helpers ── */
 function fmtDate(s: string) {
   try { return new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }); }
@@ -567,14 +647,15 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
           {items.length > 0 && <span className="rss-count-badge">{items.length}</span>}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => triggerFetch()} disabled={loading}>
-          ↻ Vernieuwen
+          <span className="btn-icon-svg">{Icons.refresh}</span>
+          Vernieuwen
         </button>
       </div>
 
       {items.length === 0 ? (
         <div className="dash-card">
           <div className="dash-empty">
-            <div className="dash-empty-icon">📭</div>
+            <div className="dash-empty-icon">{Icons.inbox}</div>
             <div className="dash-empty-text">
               Geen nieuwe berichten in de feed.<br />
               <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
@@ -605,18 +686,12 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
                 />
               )}
               <div className="rss-item-actions">
-                <button
-                  className="btn btn-yellow btn-sm"
-                  onClick={() => setEditing(item)}
-                >
-                  ✏ Bewerken & publiceren
+                <button className="btn btn-yellow btn-sm" onClick={() => setEditing(item)}>
+                  <span className="btn-icon-svg">{Icons.pencil}</span>
+                  Bewerken & publiceren
                 </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => handleReject(item)}
-                  style={{ color: 'var(--red)' }}
-                >
-                  ✕ Afwijzen
+                <button className="btn btn-ghost btn-sm" onClick={() => handleReject(item)} style={{ color: 'var(--red)' }}>
+                  Afwijzen
                 </button>
               </div>
             </div>
@@ -764,14 +839,14 @@ export default function Beheer() {
             className={`dash-nav-item${activeTab === 'berichten' ? ' active' : ''}`}
             onClick={() => setActiveTab('berichten')}
           >
-            <span className="dash-nav-icon">📋</span>
+            <span className="dash-nav-icon">{Icons.list}</span>
             <span>Berichten</span>
           </div>
           <div
             className={`dash-nav-item${activeTab === 'rss' ? ' active' : ''}`}
             onClick={() => setActiveTab('rss')}
           >
-            <span className="dash-nav-icon">📡</span>
+            <span className="dash-nav-icon">{Icons.rss}</span>
             <span>RSS Inbox</span>
             {rssPending > 0 && <span className="rss-nav-badge">{rssPending}</span>}
           </div>
@@ -779,8 +854,9 @@ export default function Beheer() {
 
         <div className="dash-sidebar-footer">
           <Link href="/" className="dash-screen-link" target="_blank">
-            <span>▶</span>
+            <span className="dash-screen-link-icon">{Icons.monitor}</span>
             <span>Nieuwsscherm</span>
+            <span className="dash-screen-link-arrow">{Icons.externalLink}</span>
           </Link>
         </div>
       </aside>
@@ -799,35 +875,36 @@ export default function Beheer() {
         <div className="dash-topbar">
           <div className="dash-topbar-title">Berichten beheren</div>
           <button className="btn btn-yellow" onClick={() => setNewOpen(true)}>
-            + Nieuw bericht
+            <span className="btn-icon-svg">{Icons.plus}</span>
+            Nieuw bericht
           </button>
         </div>
 
         {/* Stats */}
         <div className="dash-stats">
           <div className="dash-stat">
-            <div className="dash-stat-icon">📋</div>
+            <div className="dash-stat-icon dash-stat-icon--blue">{Icons.document}</div>
             <div className="dash-stat-body">
               <div className="dash-stat-num">{berichten.length}</div>
               <div className="dash-stat-label">Berichten totaal</div>
             </div>
           </div>
           <div className="dash-stat">
-            <div className="dash-stat-icon">✅</div>
+            <div className="dash-stat-icon dash-stat-icon--green">{Icons.eye}</div>
             <div className="dash-stat-body">
               <div className="dash-stat-num" style={{ color: 'var(--green)' }}>{activeCount}</div>
               <div className="dash-stat-label">Zichtbaar op scherm</div>
             </div>
           </div>
           <div className="dash-stat">
-            <div className="dash-stat-icon">📢</div>
+            <div className="dash-stat-icon dash-stat-icon--yellow">{Icons.megaphone}</div>
             <div className="dash-stat-body">
               <div className="dash-stat-num" style={{ color: 'var(--yellow-dark)' }}>{tickerCount}</div>
               <div className="dash-stat-label">In ticker</div>
             </div>
           </div>
           <div className="dash-stat">
-            <div className="dash-stat-icon">🙈</div>
+            <div className="dash-stat-icon dash-stat-icon--muted">{Icons.eyeOff}</div>
             <div className="dash-stat-body">
               <div className="dash-stat-num" style={{ color: 'var(--muted)' }}>{berichten.length - activeCount}</div>
               <div className="dash-stat-label">Verborgen</div>
@@ -838,7 +915,7 @@ export default function Beheer() {
         {/* Zoekbalk */}
         <div className="dash-search-row">
           <div className="dash-search-wrap">
-            <span className="dash-search-icon">🔍</span>
+            <span className="dash-search-icon">{Icons.search}</span>
             <input
               className="dash-search"
               placeholder="Zoeken in berichten…"
@@ -854,7 +931,7 @@ export default function Beheer() {
         <div className="dash-card">
           {filtered.length === 0 ? (
             <div className="dash-empty">
-              <div className="dash-empty-icon">{search ? '🔍' : '📋'}</div>
+              <div className="dash-empty-icon">{search ? Icons.search : Icons.inbox}</div>
               <div className="dash-empty-text">
                 {search ? 'Geen resultaten voor je zoekopdracht.' : 'Nog geen berichten. Voeg er een toe.'}
               </div>
@@ -910,11 +987,12 @@ export default function Beheer() {
 
                   {/* Acties */}
                   <div className="dash-row-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)}>
-                      ✏ Bewerken
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} title="Bewerken">
+                      <span className="btn-icon-svg">{Icons.pencil}</span>
+                      Bewerken
                     </button>
-                    <button className="btn btn-red btn-sm" onClick={() => handleDelete(b.id)}>
-                      🗑
+                    <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} title="Verwijderen">
+                      <span className="btn-icon-svg">{Icons.trash}</span>
                     </button>
                   </div>
                 </div>

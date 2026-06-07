@@ -42,6 +42,7 @@ function Ticker({ items }: { items: string[] }) {
   if (items.length < 6) {
     return (
       <div className="slide-footer slide-footer-static">
+        <div className="ticker-label"><span>Nieuws</span></div>
         <span className="ticker-welcome">Welkom bij VV Hooglanderveen</span>
       </div>
     );
@@ -55,13 +56,16 @@ function Ticker({ items }: { items: string[] }) {
   const duration = Math.max(90, Math.min(300, filled.length * 22));
   return (
     <div className="slide-footer">
-      <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
-        {doubled.map((title, i) => (
-          <span key={i} className="ticker-item">
-            <span className="ticker-dot" />
-            {title}
-          </span>
-        ))}
+      <div className="ticker-label"><span>Nieuws</span></div>
+      <div className="ticker-scroll-area">
+        <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
+          {doubled.map((title, i) => (
+            <span key={i} className="ticker-item">
+              <span className="ticker-dot" />
+              {title}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -140,13 +144,20 @@ export default function Slideshow() {
     <div className="slideshow-root">
       {/* Vaste header */}
       <div className="slide-header">
-        <div className="header-left">
+        <div className="header-logo-block">
           <Image src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} className="club-logo" priority />
-          <div className="header-club-name">VV <span>Hooglanderveen</span></div>
+          <div className="header-club-name">
+            VV Hooglanderveen
+            <span>Clubnieuws</span>
+          </div>
         </div>
+        <div className="header-middle" />
         <div className="header-right">
-          <ClockWidget />
-          <span className="header-date">{dateStr}</span>
+          <div className="header-divider" />
+          <div className="header-time-block">
+            <ClockWidget />
+            <span className="header-date">{dateStr}</span>
+          </div>
         </div>
       </div>
 
