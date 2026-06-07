@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht, Category } from '@/lib/types';
 
@@ -253,24 +254,17 @@ export default function Beheer() {
     await fetchBerichten();
   };
 
-  const Logo = () => (
-    <svg className="admin-logo" viewBox="0 0 60 60" fill="none">
-      <path d="M30 2 L55 15 L55 38 Q55 52 30 58 Q5 52 5 38 L5 15 Z" fill="#f5c800" stroke="#0b2d52" strokeWidth="2"/>
-      <text x="50%" y="40%" dominantBaseline="middle" textAnchor="middle" fill="#0b2d52" fontSize="18" fontWeight="bold" fontFamily="sans-serif">VV</text>
-      <text x="50%" y="68%" dominantBaseline="middle" textAnchor="middle" fill="#0b2d52" fontSize="6.5" fontFamily="sans-serif" letterSpacing="0.5">HV</text>
-    </svg>
-  );
-
   const activeCount = berichten.filter(b => b.active).length;
 
   return (
     <div className="admin-root">
       <header className="admin-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Logo />
+        <div className="admin-header-left">
+          <Image src="/logo.png" alt="VV Hooglanderveen" width={40} height={40} className="admin-logo" />
           <div className="admin-title">
-            VV <span>Hooglanderveen</span> — Beheer
+            VV <span>Hooglanderveen</span>
           </div>
+          <span className="header-badge">Beheer</span>
         </div>
         <Link href="/" className="nav-btn" target="_blank">
           ▶ Nieuwsscherm
@@ -291,9 +285,7 @@ export default function Beheer() {
               Berichten
               <span className="count-pill">{berichten.length}</span>
               {activeCount > 0 && (
-                <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
-                  {activeCount} actief
-                </span>
+                <span className="active-pill">{activeCount} actief</span>
               )}
             </div>
           </div>
