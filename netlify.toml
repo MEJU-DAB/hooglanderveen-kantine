@@ -2,5 +2,11 @@
   command   = "npm run build"
   publish   = ".next"
 
+[functions]
+  directory = "netlify/functions"
+
+# Zet RSS_FEED_URL ook in het Netlify dashboard (Site settings → Environment variables)
+# RSS_FEED_URL = "https://www.vvhooglanderveen.nl/feed/"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"

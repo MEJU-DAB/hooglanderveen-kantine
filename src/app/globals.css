@@ -128,7 +128,7 @@ body {
   /* fade-positie: position:absolute + opacity komen uit .slides-viewport regels */
   display: flex;
   flex-direction: column;
-  padding: 2rem 4rem 2rem 4.5rem;
+  padding: 1.5rem 3.5rem 1.5rem 4rem;
   overflow: hidden;
   background: var(--white);
 }
@@ -193,7 +193,7 @@ body {
   align-self: flex-start;
 }
 
-/* Headline — vh-based so het scherm echt gevuld wordt */
+/* Headline — font-size via JS binary search */
 .slide-headline {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 900;
@@ -203,61 +203,43 @@ body {
   color: var(--blue);
   overflow-wrap: break-word;
   word-break: break-word;
+  flex-shrink: 0;
 }
-
-/* Zonder afbeelding — vult het scherm */
-.slide-headline.size-xl { font-size: clamp(7rem,  22vh, 20rem); }
-.slide-headline.size-lg { font-size: clamp(5rem,  16vh, 13rem); }
-.slide-headline.size-md { font-size: clamp(3.5rem, 11vh, 9rem); }
-.slide-headline.size-sm { font-size: clamp(2.5rem,  8vh, 6rem); }
-.slide-headline.size-xs { font-size: clamp(1.8rem,  5vh, 3.5rem); }
-
-/* Met afbeelding — linker kolom, ruim geschaald */
-.slide-body.has-image .slide-headline.size-xl { font-size: clamp(5rem,  15vh, 12rem); }
-.slide-body.has-image .slide-headline.size-lg { font-size: clamp(3.5rem, 11vh, 8.5rem); }
-.slide-body.has-image .slide-headline.size-md { font-size: clamp(2.8rem,  8vh, 6rem);  }
-.slide-body.has-image .slide-headline.size-sm { font-size: clamp(2rem,    6vh, 4.5rem); }
-.slide-body.has-image .slide-headline.size-xs { font-size: clamp(1.5rem,  4vh, 3rem);  }
 
 .slide-headline em {
   color: var(--yellow-dark);
   font-style: normal;
 }
 
-/* Yellow divider under headline — marges schalen mee met kopgrootte */
-.slide-divider {
-  width: 60px;
-  height: 5px;
-  background: var(--yellow);
-  border-radius: 3px;
-  margin-top: var(--divider-mt, 0.5rem);
-  margin-bottom: var(--divider-mb, 0.75rem);
+/* Ruimte tussen titel en artikel — geen zichtbare lijn */
+.slide-title-gap {
+  height: 1.8rem;
   flex-shrink: 0;
 }
 
-/* Body text — grootte via JS-klasse */
+/* Body text — font-size via JS binary search */
 .slide-content {
   font-family: 'Barlow', sans-serif;
-  line-height: 1.25;
-  color: var(--ink-mid);
-  white-space: pre-wrap;
+  line-height: 1.3;
+  color: var(--ink);
+  white-space: normal;
   max-width: 76ch;
   font-weight: 400;
-  flex-shrink: 1;
-  min-height: 0;
+  overflow: hidden;
 }
-.slide-content.body-xl { font-size: clamp(2rem,   5.5vh, 4rem);  }
-.slide-content.body-lg { font-size: clamp(1.7rem,  4.5vh, 3rem);  }
-.slide-content.body-md { font-size: clamp(1.4rem,  3.5vh, 2.4rem); }
-.slide-content.body-sm { font-size: clamp(1.2rem,  2.8vh, 2rem);  }
-.slide-content.body-xs { font-size: clamp(1rem,    2.2vh, 1.6rem); }
-
-.slide-body.has-image .slide-content.body-xl { font-size: clamp(1.8rem, 4vh, 3rem);    }
-.slide-body.has-image .slide-content.body-lg { font-size: clamp(1.5rem, 3.2vh, 2.4rem); }
-.slide-body.has-image .slide-content.body-md { font-size: clamp(1.3rem, 2.8vh, 2rem);  }
-.slide-body.has-image .slide-content.body-sm { font-size: clamp(1.1rem, 2.2vh, 1.7rem); }
-.slide-body.has-image .slide-content.body-xs { font-size: clamp(0.85rem, 1.6vh, 1.2rem); }
-
+/* Alinea-afstand: compact maar leesbaar */
+.slide-content p   { margin: 0 0 0.5em; }
+.slide-content p:first-child { margin-top: 0; }
+.slide-content p:last-child  { margin-bottom: 0; }
+.slide-content ul,
+.slide-content ol  { margin: 0 0 0.5em; padding-left: 1.4em; }
+.slide-content li  { margin-bottom: 0.2em; }
+.slide-content h1, .slide-content h2, .slide-content h3 {
+  margin: 0.4em 0 0.2em;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
 .slide-content em     { color: var(--blue-mid); font-style: normal; font-weight: 600; }
 .slide-content strong { font-weight: 700; color: var(--ink); }
 
@@ -361,7 +343,7 @@ body {
   gap: 1rem;
   padding: 0 2rem;
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -592,6 +574,8 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
 .btn-sm { padding: 6px 13px; font-size: 0.78rem; border-radius: 6px; }
 .btn-red { background: transparent; color: var(--red); border: 1.5px solid rgba(229,57,53,0.25); }
 .btn-red:hover { background: var(--red); color: var(--white); border-color: var(--red); }
+.btn-blue { background: var(--blue); color: var(--white); }
+.btn-blue:hover { background: var(--blue-mid); }
 .btn-icon {
   background: transparent; border: none; cursor: pointer;
   font-size: 1rem; padding: 5px 7px; border-radius: 6px;
@@ -1408,3 +1392,208 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
   font-weight: 600;
 }
 
+/* ── RSS Inbox ── */
+.rss-inbox-root { display: flex; flex-direction: column; gap: 0; }
+
+.rss-nav-badge {
+  margin-left: auto;
+  background: var(--yellow);
+  color: var(--blue);
+  font-size: 0.68rem;
+  font-weight: 800;
+  border-radius: 99px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.rss-count-badge {
+  background: var(--yellow);
+  color: var(--blue);
+  font-size: 0.75rem;
+  font-weight: 800;
+  border-radius: 99px;
+  padding: 2px 9px;
+  margin-left: 10px;
+}
+
+.rss-list { padding: 0 !important; }
+
+.rss-item {
+  padding: 1.2rem 1.6rem;
+  border-bottom: 1.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.rss-item:last-child { border-bottom: none; }
+
+.rss-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rss-item-date {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+.rss-item-link {
+  font-size: 0.72rem;
+  color: var(--blue-mid);
+  text-decoration: none;
+}
+.rss-item-link:hover { text-decoration: underline; }
+
+.rss-item-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--blue);
+  line-height: 1.2;
+}
+
+.rss-item-preview {
+  font-size: 0.82rem;
+  color: var(--ink-mid);
+  line-height: 1.5;
+}
+
+.rss-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.rss-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.rss-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.2rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.rss-source-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--off-white);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 1rem;
+}
+.rss-source-note a { color: var(--blue-mid); text-decoration: none; }
+.rss-source-note a:hover { text-decoration: underline; }
+
+/* ── Schermpreview modal ── */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 20, 50, 0.75);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.preview-panel {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  width: min(96vw, 1020px);
+}
+.preview-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1.5px solid var(--border);
+  flex-shrink: 0;
+}
+.preview-panel-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+/* Sliding container — outer clips to scaled size, inner is 1920×1080 */
+.preview-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #0a1a30;
+  flex-shrink: 0;
+}
+
+/* Tekstgrootte bediening */
+.preview-controls {
+  padding: 14px 20px 10px;
+  border-top: 1.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.preview-controls-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-mid);
+  white-space: nowrap;
+}
+.preview-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.preview-size-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--blue);
+  min-width: 6ch;
+  text-align: right;
+}
+.preview-size-val em { color: var(--muted); font-style: normal; }
+.preview-controls-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding-left: 2px;
+}
+
+/* Opslaan / sluiten */
+.preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 16px;
+  border-top: 1.5px solid var(--border);
+}
+
+/* Preview-knop rij in het formulier */
+.form-preview-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.preview-open-btn {
+  font-size: 0.82rem !important;
+}

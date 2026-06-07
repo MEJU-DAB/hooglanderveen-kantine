@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -12,11 +12,25 @@ import CharacterCount from '@tiptap/extension-character-count';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Bericht } from '@/lib/types';
 import { splitContent, stripTags } from '@/lib/splitContent';
+import { AutoFitSlide } from '@/components/AutoFitSlide';
 
 /* ── helpers ── */
 function fmtDate(s: string) {
   try { return new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }); }
   catch { return s; }
+}
+
+/* ── RSS inbox types ── */
+interface RssItem {
+  id: number;
+  guid: string;
+  title: string;
+  content: string;
+  link: string;
+  pub_date: string;
+  fetched_at: string;
+  status: string;
+  bericht_id: number | null;
 }
 
 /* ── types ── */
@@ -28,8 +42,9 @@ interface FormState {
   image: string | null;
   ticker: boolean;
   duration: number;
+  font_size: number; // rem override bodytekst, 0 = auto
 }
-const emptyForm = (): FormState => ({ title: '', content: '', image: null, ticker: true, duration: DEFAULT_DURATION });
+const emptyForm = (): FormState => ({ title: '', content: '', image: null, ticker: true, duration: DEFAULT_DURATION, font_size: 0 });
 
 /* ── Toast ── */
 function Toast({ msg, err, show }: { msg: string; err: boolean; show: boolean }) {
@@ -217,6 +232,125 @@ function PaginaPreview({ content, hasImage }: { content: string; hasImage: boole
   );
 }
 
+/* ── SlidePreviewModal ── */
+// De preview rendert de slide op echte 1920×1080 afmetingen en schaalt die
+// visueel terug met CSS transform — daardoor kloppen de auto-fit metingen exact.
+const PREVIEW_SCALE = 0.5;
+const PREVIEW_W = Math.round(1920 * PREVIEW_SCALE); // 960
+const PREVIEW_H = Math.round(1080 * PREVIEW_SCALE); // 540
+
+function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSizeChange, onSave, onClose }: {
+  title: string;
+  content: string;
+  image: string | null;
+  fontSizeOverride: number;
+  onFontSizeChange: (v: number) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(PREVIEW_SCALE);
+
+  // Pas schaal aan op breedte van het scherm
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const fit = el.clientWidth / 1920;
+    setScale(fit);
+  }, []);
+
+  const sliderVal = fontSizeOverride > 0 ? fontSizeOverride : 1.5;
+  const isAuto = fontSizeOverride === 0;
+
+  return (
+    <div className="preview-overlay" onClick={onClose}>
+      <div className="preview-panel" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="preview-panel-header">
+          <span className="preview-panel-title">Schermpreview</span>
+          <button type="button" className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Scaled slide */}
+        <div ref={stageRef} className="preview-stage" style={{ height: Math.round(1080 * scale) }}>
+          <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute' }}>
+            {/* Volledige slideshow structuur zodat auto-fit identiek is aan het echte scherm */}
+            <div className="slideshow-root" style={{ width: 1920, height: 1080 }}>
+              <div className="slide-header">
+                <div className="header-left">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} style={{ objectFit: 'contain' }} />
+                  <div className="header-club-name">VV <span>Hooglanderveen</span></div>
+                </div>
+                <div className="header-right">
+                  <span className="header-date">Schermpreview</span>
+                </div>
+              </div>
+              <div className="slides-viewport">
+                <div className={`slide-body active${image ? ' has-image' : ''}`}>
+                  <AutoFitSlide
+                    title={title || '(geen titel)'}
+                    content={content}
+                    image={image}
+                    fontSizeOverride={fontSizeOverride}
+                  />
+                  {image && (
+                    <div className="slide-img-wrap">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={image} alt={title} />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="slide-footer slide-footer-static">
+                <span className="ticker-welcome">Welkom bij VV Hooglanderveen</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tekstgrootte bediening */}
+        <div className="preview-controls">
+          <div className="preview-controls-row">
+            <span className="preview-controls-label">Tekstgrootte:</span>
+            <button
+              type="button"
+              className={`btn btn-sm${isAuto ? ' btn-yellow' : ' btn-ghost'}`}
+              onClick={() => onFontSizeChange(0)}
+            >
+              Auto
+            </button>
+            <input
+              type="range"
+              min={0.9} max={3.5} step={0.05}
+              value={sliderVal}
+              onChange={e => onFontSizeChange(Number(e.target.value))}
+              className="preview-slider"
+            />
+            <span className="preview-size-val">
+              {isAuto ? <em>auto-fit</em> : `${fontSizeOverride.toFixed(2)} rem`}
+            </span>
+          </div>
+          {!isAuto && (
+            <div className="preview-controls-hint">
+              Schuif de slider om de tekstgrootte aan te passen. Klik <strong>Auto</strong> om terug te gaan naar automatisch.
+            </div>
+          )}
+        </div>
+
+        {/* Acties */}
+        <div className="preview-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Sluiten</button>
+          <button type="button" className="btn btn-yellow" onClick={onSave}>
+            {isAuto ? 'Opslaan (auto-fit)' : `Opslaan (${fontSizeOverride.toFixed(2)} rem)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── BerichtForm ── */
 function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   initial?: FormState;
@@ -227,6 +361,8 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   const [form, setForm] = useState<FormState>(initial ?? emptyForm());
   const [saving, setSaving] = useState(false);
   const [showPages, setShowPages] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFontSize, setPreviewFontSize] = useState(0);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -257,15 +393,36 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
         <RichEditor value={form.content} onChange={v => set('content', v)} />
       </div>
 
-      {/* Pagina preview toggle */}
-      {hasContent && (
-        <div className="form-section">
-          <button type="button" className="btn btn-ghost btn-sm"
-            onClick={() => setShowPages(p => !p)}>
-            {showPages ? '▲ Paginaindeling verbergen' : '▼ Paginaindeling bekijken'}
+      {/* Preview + paginaindeling */}
+      {(form.title || hasContent) && (
+        <div className="form-section form-preview-row">
+          <button
+            type="button"
+            className="btn btn-blue btn-sm preview-open-btn"
+            onClick={() => { setPreviewFontSize(form.font_size); setPreviewOpen(true); }}
+          >
+            👁 Schermpreview{form.font_size > 0 ? ` (${form.font_size.toFixed(2)} rem)` : ' (auto)'}
           </button>
-          {showPages && <PaginaPreview content={form.content} hasImage={!!form.image} />}
+          {hasContent && (
+            <button type="button" className="btn btn-ghost btn-sm"
+              onClick={() => setShowPages(p => !p)}>
+              {showPages ? '▲ Paginaindeling verbergen' : '▼ Paginaindeling bekijken'}
+            </button>
+          )}
         </div>
+      )}
+      {showPages && hasContent && <PaginaPreview content={form.content} hasImage={!!form.image} />}
+
+      {previewOpen && (
+        <SlidePreviewModal
+          title={form.title}
+          content={form.content}
+          image={form.image}
+          fontSizeOverride={previewFontSize}
+          onFontSizeChange={setPreviewFontSize}
+          onSave={() => { set('font_size', previewFontSize); setPreviewOpen(false); }}
+          onClose={() => setPreviewOpen(false)}
+        />
       )}
 
       {/* Afbeelding */}
@@ -328,7 +485,7 @@ function EditDrawer({ bericht, onSave, onClose }: {
         </div>
         <div className="drawer-body">
           <BerichtForm
-            initial={{ title: bericht.title, content: bericht.content, image: bericht.image, ticker: bericht.ticker, duration: bericht.duration ?? DEFAULT_DURATION }}
+            initial={{ title: bericht.title, content: bericht.content, image: bericht.image, ticker: bericht.ticker, duration: bericht.duration ?? DEFAULT_DURATION, font_size: bericht.font_size ?? 0 }}
             onSave={onSave}
             onCancel={onClose}
             saveLabel="Wijzigingen opslaan"
@@ -339,6 +496,173 @@ function EditDrawer({ bericht, onSave, onClose }: {
   );
 }
 
+/* ── RSS Inbox ── */
+function RssInbox({ onPublished }: { onPublished: () => void }) {
+  const [items, setItems] = useState<RssItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<RssItem | null>(null);
+  const [toast, setToast] = useState({ msg: '', err: false, show: false });
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string, err = false) => {
+    if (toastRef.current) clearTimeout(toastRef.current);
+    setToast({ msg, err, show: true });
+    toastRef.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 2800);
+  };
+
+  const fetchItems = useCallback(async () => {
+    const res = await fetch('/api/rss');
+    setItems(await res.json());
+  }, []);
+
+  const triggerFetch = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      await fetch('/api/rss', { method: 'POST' });
+      await fetchItems();
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [fetchItems]);
+
+  useEffect(() => {
+    triggerFetch(); // eerste fetch bij openen tab
+    const id = setInterval(() => triggerFetch(true), 5 * 60 * 1000); // elke 5 min
+    return () => clearInterval(id);
+  }, [triggerFetch]);
+
+  const handleReject = async (item: RssItem) => {
+    if (!confirm(`"${item.title}" afwijzen? Het komt niet meer terug.`)) return;
+    await fetch(`/api/rss/${item.id}`, { method: 'DELETE' });
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    showToast('Afgewezen');
+  };
+
+  const handlePublish = async (form: FormState) => {
+    if (!editing) return;
+    const res = await fetch(`/api/rss/${editing.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, category: 'nieuws' }),
+    });
+    if (!res.ok) { showToast('Fout bij publiceren', true); return; }
+    setItems(prev => prev.filter(i => i.id !== editing.id));
+    setEditing(null);
+    showToast('Gepubliceerd op het nieuwsscherm ✓');
+    onPublished();
+  };
+
+  if (loading) return (
+    <div className="rss-loading">
+      <span className="rss-spinner">↻</span> Feed ophalen…
+    </div>
+  );
+
+  return (
+    <div className="rss-inbox-root">
+      {/* Header */}
+      <div className="dash-topbar">
+        <div className="dash-topbar-title">
+          RSS Inbox
+          {items.length > 0 && <span className="rss-count-badge">{items.length}</span>}
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => triggerFetch()} disabled={loading}>
+          ↻ Vernieuwen
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="dash-card">
+          <div className="dash-empty">
+            <div className="dash-empty-icon">📭</div>
+            <div className="dash-empty-text">
+              Geen nieuwe berichten in de feed.<br />
+              <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                Nieuwe artikelen op vvhooglanderveen.nl verschijnen hier automatisch.
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="dash-card rss-list">
+          {items.map(item => (
+            <div key={item.id} className="rss-item">
+              <div className="rss-item-meta">
+                <span className="rss-item-date">{item.pub_date ? fmtDate(item.pub_date) : 'Onbekende datum'}</span>
+                {item.link && (
+                  <a href={item.link} target="_blank" rel="noreferrer" className="rss-item-link">
+                    ↗ Bekijk op site
+                  </a>
+                )}
+              </div>
+              <div className="rss-item-title">{item.title || '(geen titel)'}</div>
+              {item.content && (
+                <div
+                  className="rss-item-preview"
+                  dangerouslySetInnerHTML={{
+                    __html: item.content.replace(/<[^>]+>/g, ' ').slice(0, 200) + (item.content.length > 200 ? '…' : ''),
+                  }}
+                />
+              )}
+              <div className="rss-item-actions">
+                <button
+                  className="btn btn-yellow btn-sm"
+                  onClick={() => setEditing(item)}
+                >
+                  ✏ Bewerken & publiceren
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => handleReject(item)}
+                  style={{ color: 'var(--red)' }}
+                >
+                  ✕ Afwijzen
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit & publish drawer */}
+      {editing && (
+        <>
+          <div className="drawer-overlay" onClick={() => setEditing(null)} />
+          <div className="drawer">
+            <div className="drawer-header">
+              <div className="drawer-title">Bewerken & publiceren</div>
+              <button className="btn-icon drawer-close" onClick={() => setEditing(null)}>✕</button>
+            </div>
+            <div className="drawer-body">
+              <div className="rss-source-note">
+                📡 Bron: RSS feed vvhooglanderveen.nl
+                {editing.link && (
+                  <a href={editing.link} target="_blank" rel="noreferrer"> — bekijk origineel ↗</a>
+                )}
+              </div>
+              <BerichtForm
+                initial={{
+                  title: editing.title,
+                  content: editing.content,
+                  image: null,
+                  ticker: true,
+                  duration: DEFAULT_DURATION,
+                  font_size: 0,
+                }}
+                onSave={handlePublish}
+                onCancel={() => setEditing(null)}
+                saveLabel="Publiceren op nieuwsscherm"
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      <Toast msg={toast.msg} err={toast.err} show={toast.show} />
+    </div>
+  );
+}
+
 /* ── Beheer main ── */
 export default function Beheer() {
   const [berichten, setBerichten] = useState<Bericht[]>([]);
@@ -346,6 +670,8 @@ export default function Beheer() {
   const [editing, setEditing] = useState<Bericht | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'berichten' | 'rss'>('berichten');
+  const [rssPending, setRssPending] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, err = false) => {
@@ -359,7 +685,20 @@ export default function Beheer() {
     setBerichten(await res.json());
   }, []);
 
-  useEffect(() => { fetchBerichten(); }, [fetchBerichten]);
+  const fetchRssBadge = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rss');
+      const items = await res.json();
+      setRssPending(Array.isArray(items) ? items.length : 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchBerichten();
+    fetchRssBadge();
+    const id = setInterval(fetchRssBadge, 60_000); // badge elke minuut updaten
+    return () => clearInterval(id);
+  }, [fetchBerichten, fetchRssBadge]);
 
   const handleAdd = async (form: FormState) => {
     const res = await fetch('/api/berichten', {
@@ -421,9 +760,20 @@ export default function Beheer() {
         </div>
 
         <nav className="dash-nav">
-          <div className="dash-nav-item active">
+          <div
+            className={`dash-nav-item${activeTab === 'berichten' ? ' active' : ''}`}
+            onClick={() => setActiveTab('berichten')}
+          >
             <span className="dash-nav-icon">📋</span>
             <span>Berichten</span>
+          </div>
+          <div
+            className={`dash-nav-item${activeTab === 'rss' ? ' active' : ''}`}
+            onClick={() => setActiveTab('rss')}
+          >
+            <span className="dash-nav-icon">📡</span>
+            <span>RSS Inbox</span>
+            {rssPending > 0 && <span className="rss-nav-badge">{rssPending}</span>}
           </div>
         </nav>
 
@@ -437,6 +787,13 @@ export default function Beheer() {
 
       {/* ── Main ── */}
       <main className="dash-main">
+
+        {/* RSS Inbox tab */}
+        {activeTab === 'rss' && (
+          <RssInbox onPublished={() => { fetchBerichten(); fetchRssBadge(); }} />
+        )}
+
+        {activeTab !== 'rss' && <>
 
         {/* Top bar */}
         <div className="dash-topbar">
@@ -565,6 +922,8 @@ export default function Beheer() {
             </div>
           )}
         </div>
+
+        </> /* einde berichten-tab */}
       </main>
 
       {/* ── Nieuw bericht drawer ── */}

@@ -23,7 +23,23 @@ export async function initDb() {
     );
   `);
   try { await db.execute("ALTER TABLE berichten ADD COLUMN ticker   INTEGER NOT NULL DEFAULT 1"); } catch {}
-  try { await db.execute("ALTER TABLE berichten ADD COLUMN duration INTEGER NOT NULL DEFAULT 10"); } catch {}
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN duration  INTEGER NOT NULL DEFAULT 10"); } catch {}
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN font_size REAL    NOT NULL DEFAULT 0");  } catch {}
+
+  // RSS inbox
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS rss_inbox (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid       TEXT    NOT NULL UNIQUE,
+      title      TEXT    NOT NULL DEFAULT '',
+      content    TEXT    NOT NULL DEFAULT '',
+      link       TEXT    NOT NULL DEFAULT '',
+      pub_date   TEXT    NOT NULL DEFAULT '',
+      fetched_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+      status     TEXT    NOT NULL DEFAULT 'pending',
+      bericht_id INTEGER
+    );
+  `);
 }
 
 export default db;

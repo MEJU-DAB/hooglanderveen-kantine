@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht } from '@/lib/types';
-import { splitContent, renderContent, stripTags } from '@/lib/splitContent';
-
-const DEFAULT_SLIDE_MS = 10000;
+import { splitContent } from '@/lib/splitContent';
+import { AutoFitSlide } from '@/components/AutoFitSlide';
 
 function fmtTime() {
   return new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
@@ -23,7 +22,9 @@ interface SlideItem extends Bericht {
  */
 function splitBericht(b: Bericht): SlideItem[] {
   if (!b.content) return [{ ...b, _page: 1, _pages: 1 }];
-  const maxPerPage = b.image ? 600 : 1200;
+  // Standaard: alles op 1 pagina. Auto-fit schaalt tekst naar beschikbare ruimte.
+  // Alleen bij écht enorme teksten (> ~1000 woorden) splitsen.
+  const maxPerPage = b.image ? 3500 : 6000;
   const chunks = splitContent(b.content, maxPerPage);
   if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1 }];
   return chunks.map((chunk, i) => ({
@@ -31,78 +32,6 @@ function splitBericht(b: Bericht): SlideItem[] {
   }));
 }
 
-/**
- * Auto-fit tekst-component.
- * Render kop + body op max font-size; meet of het in de container past;
- * zoek via binary search naar de grootste font-size die past.
- * Kop en body schalen proportioneel mee.
- */
-function AutoFitContent({ b }: { b: SlideItem }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
-
-  const MIN_HL = 1.2;
-  const BODY_RATIO = 0.38;
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current;
-    const text = textRef.current;
-    if (!wrap || !text) return;
-
-    const avail = wrap.clientHeight;
-    if (avail <= 0) return;
-
-    // Schat beschikbare kolombreedte (zonder padding)
-    const colW = wrap.clientWidth - 16;
-    const titleText = stripTags(b.title) || b.title;
-    const charWidthRatio = 0.50;
-    const maxForLines = (colW * 1.5) / (Math.max(1, titleText.length) * charWidthRatio) / 16;
-    const MAX_HL = Math.min(b.image ? 7 : 18, Math.max(MIN_HL, maxForLines));
-
-    let lo = MIN_HL;
-    let hi = MAX_HL;
-
-    const apply = (hl: number) => {
-      const bd = Math.max(0.85, hl * BODY_RATIO);
-      // Marges op de gele streep: schalen met kopgrootte
-      const mg = Math.max(0.35, hl * 0.28);
-      text.style.setProperty('--hl', `${hl}rem`);
-      text.style.setProperty('--bd', `${bd}rem`);
-      text.style.setProperty('--divider-mt', `${mg}rem`);
-      text.style.setProperty('--divider-mb', `${mg * 1.4}rem`);
-    };
-
-    apply(hi);
-    if (text.scrollHeight <= avail) return;
-
-    for (let i = 0; i < 12; i++) {
-      const mid = (lo + hi) / 2;
-      apply(mid);
-      if (text.scrollHeight <= avail) lo = mid; else hi = mid;
-    }
-    apply(lo);
-  }, [b.id, b.title, b.content, b.image, BODY_RATIO, MIN_HL]);
-
-  return (
-    <div ref={wrapRef} className="slide-text-wrap">
-      <div ref={textRef} className="slide-body-text">
-        <div
-          className="slide-headline"
-          style={{ fontSize: 'var(--hl, 4rem)' }}
-          dangerouslySetInnerHTML={{ __html: renderContent(b.title) }}
-        />
-        <div className="slide-divider" />
-        {b.content && (
-          <div
-            className="slide-content"
-            style={{ fontSize: 'var(--bd, 1.5rem)' }}
-            dangerouslySetInnerHTML={{ __html: renderContent(b.content) }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
 /**
  * Ticker — genereert genoeg kopieën om het scherm te vullen zodat er
@@ -123,7 +52,7 @@ function Ticker({ items }: { items: string[] }) {
   const copies = Math.max(2, Math.ceil(3840 / singlePx));
   const filled = Array.from({ length: copies }, () => items).flat();
   const doubled = [...filled, ...filled];
-  const duration = Math.max(40, Math.min(120, filled.length * 10));
+  const duration = Math.max(90, Math.min(300, filled.length * 22));
   return (
     <div className="slide-footer">
       <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
@@ -238,7 +167,12 @@ export default function Slideshow() {
               key={b.id}
               className={`slide-body${b.image ? ' has-image' : ''}${i === idx ? ' active' : ''}`}
             >
-              <AutoFitContent b={b} />
+              <AutoFitSlide
+                title={b.title}
+                content={b.content}
+                image={b.image}
+                fontSizeOverride={b.font_size ?? 0}
+              />
               {b.image && (
                 <div className="slide-img-wrap">
                   {/* eslint-disable-next-line @next/next/no-img-element */}

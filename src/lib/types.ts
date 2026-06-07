@@ -10,5 +10,6 @@ export interface Bericht {
   image: string | null;
   created_at: string;
   sort_order: number;
-  duration: number; // weergaveduur in seconden, default 10
+  duration: number;   // weergaveduur in seconden, default 10
+  font_size: number;  // rem override voor bodytekst, 0 = auto-fit
 }
