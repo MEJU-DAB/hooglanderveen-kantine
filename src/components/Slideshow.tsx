@@ -1,43 +1,141 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht } from '@/lib/types';
+import { splitContent, renderContent, stripTags } from '@/lib/splitContent';
 
-const SLIDE_MS = 10000;
-
-function fmtDate(s: string) {
-  try {
-    return new Date(s).toLocaleDateString('nl-NL', {
-      weekday: 'long', day: 'numeric', month: 'long',
-    });
-  } catch { return s; }
-}
+const DEFAULT_SLIDE_MS = 10000;
 
 function fmtTime() {
   return new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 }
 
-function catLabel(c: string) {
-  return ({ nieuws: 'Nieuws', wedstrijd: 'Wedstrijd', selectie: 'Selectie', jeugd: 'Jeugd', overig: 'Overig' } as Record<string, string>)[c] ?? c;
+interface SlideItem extends Bericht {
+  _page: number;
+  _pages: number;
 }
 
-function catIcon(c: string) {
-  return ({ nieuws: '📰', wedstrijd: '⚽', selectie: '🏆', jeugd: '🌱', overig: '📌' } as Record<string, string>)[c] ?? '📌';
+/**
+ * Splits alleen als content echt heel lang is — de auto-fit regelt de rest.
+ * Splitst op alinea-grenzen, max 3 pagina's.
+ */
+function splitBericht(b: Bericht): SlideItem[] {
+  if (!b.content) return [{ ...b, _page: 1, _pages: 1 }];
+  const maxPerPage = b.image ? 600 : 1200;
+  const chunks = splitContent(b.content, maxPerPage);
+  if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1 }];
+  return chunks.map((chunk, i) => ({
+    ...b, id: b.id * 10000 + i, content: chunk, _page: i + 1, _pages: chunks.length,
+  }));
 }
 
-function renderText(t: string) {
-  return t
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');
+/**
+ * Auto-fit tekst-component.
+ * Render kop + body op max font-size; meet of het in de container past;
+ * zoek via binary search naar de grootste font-size die past.
+ * Kop en body schalen proportioneel mee.
+ */
+function AutoFitContent({ b }: { b: SlideItem }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+
+  const MIN_HL = 1.2;
+  const BODY_RATIO = 0.38;
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const text = textRef.current;
+    if (!wrap || !text) return;
+
+    const avail = wrap.clientHeight;
+    if (avail <= 0) return;
+
+    // Schat beschikbare kolombreedte (zonder padding)
+    const colW = wrap.clientWidth - 16;
+    const titleText = stripTags(b.title) || b.title;
+    const charWidthRatio = 0.50;
+    const maxForLines = (colW * 1.5) / (Math.max(1, titleText.length) * charWidthRatio) / 16;
+    const MAX_HL = Math.min(b.image ? 7 : 18, Math.max(MIN_HL, maxForLines));
+
+    let lo = MIN_HL;
+    let hi = MAX_HL;
+
+    const apply = (hl: number) => {
+      const bd = Math.max(0.85, hl * BODY_RATIO);
+      // Marges op de gele streep: schalen met kopgrootte
+      const mg = Math.max(0.35, hl * 0.28);
+      text.style.setProperty('--hl', `${hl}rem`);
+      text.style.setProperty('--bd', `${bd}rem`);
+      text.style.setProperty('--divider-mt', `${mg}rem`);
+      text.style.setProperty('--divider-mb', `${mg * 1.4}rem`);
+    };
+
+    apply(hi);
+    if (text.scrollHeight <= avail) return;
+
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      apply(mid);
+      if (text.scrollHeight <= avail) lo = mid; else hi = mid;
+    }
+    apply(lo);
+  }, [b.id, b.title, b.content, b.image, BODY_RATIO, MIN_HL]);
+
+  return (
+    <div ref={wrapRef} className="slide-text-wrap">
+      <div ref={textRef} className="slide-body-text">
+        <div
+          className="slide-headline"
+          style={{ fontSize: 'var(--hl, 4rem)' }}
+          dangerouslySetInnerHTML={{ __html: renderContent(b.title) }}
+        />
+        <div className="slide-divider" />
+        {b.content && (
+          <div
+            className="slide-content"
+            style={{ fontSize: 'var(--bd, 1.5rem)' }}
+            dangerouslySetInnerHTML={{ __html: renderContent(b.content) }}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
-/** Kies headline-grootte op basis van aantal tekens */
-function headlineSize(title: string, hasImage: boolean): string {
-  const len = title.length;
-  if (hasImage) return len < 30 ? 'size-lg' : len < 60 ? 'size-md' : 'size-sm';
-  return len < 20 ? 'size-xl' : len < 40 ? 'size-lg' : len < 70 ? 'size-md' : 'size-sm';
+/**
+ * Ticker — genereert genoeg kopieën om het scherm te vullen zodat er
+ * geen zichtbare herhaling is zolang de vorige serie nog in beeld is.
+ */
+function Ticker({ items }: { items: string[] }) {
+  // Minder dan 6 items → stilstaand welkomstbericht
+  if (items.length < 6) {
+    return (
+      <div className="slide-footer slide-footer-static">
+        <span className="ticker-welcome">Welkom bij VV Hooglanderveen</span>
+      </div>
+    );
+  }
+
+  const EST_PX_PER_ITEM = 150;
+  const singlePx = items.length * EST_PX_PER_ITEM;
+  const copies = Math.max(2, Math.ceil(3840 / singlePx));
+  const filled = Array.from({ length: copies }, () => items).flat();
+  const doubled = [...filled, ...filled];
+  const duration = Math.max(40, Math.min(120, filled.length * 10));
+  return (
+    <div className="slide-footer">
+      <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
+        {doubled.map((title, i) => (
+          <span key={i} className="ticker-item">
+            <span className="ticker-dot" />
+            {title}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ClockWidget() {
@@ -52,10 +150,13 @@ function ClockWidget() {
 export default function Slideshow() {
   const [berichten, setBerichten] = useState<Bericht[]>([]);
   const [current, setCurrent] = useState(0);
-  const [barWidth, setBarWidth] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentRef = useRef(0);
+  const activeRef  = useRef<SlideItem[]>([]); // altijd actueel, ook in timer-closure
 
-  const active = berichten.filter(b => b.active);
+  const active: SlideItem[] = berichten.filter(b => b.active).flatMap(splitBericht);
+  activeRef.current = active; // sync elke render
+  const tickerItems = active.filter(b => b.ticker && b._page === 1).map(b => b.title);
 
   const fetchBerichten = useCallback(async () => {
     try {
@@ -70,19 +171,28 @@ export default function Slideshow() {
     return () => clearInterval(id);
   }, [fetchBerichten]);
 
-  const startBar = useCallback(() => {
-    setBarWidth(0);
-    setTimeout(() => setBarWidth(100), 50);
+  const getMs = useCallback(() => {
+    const slides = activeRef.current;
+    return slides.length > 0
+      ? (slides[currentRef.current % slides.length]?.duration ?? 10) * 1000
+      : 10000;
   }, []);
 
   useEffect(() => {
     if (active.length === 0) return;
-    startBar();
-    timerRef.current = setTimeout(function tick() {
-      setCurrent(c => (c + 1) % active.length);
-      startBar();
-      timerRef.current = setTimeout(tick, SLIDE_MS);
-    }, SLIDE_MS);
+    currentRef.current = 0;
+
+    const schedule = (delay: number) => {
+      timerRef.current = setTimeout(() => {
+        const slides = activeRef.current;
+        if (slides.length === 0) return;
+        const next = (currentRef.current + 1) % slides.length;
+        currentRef.current = next;
+        setCurrent(next);
+        schedule(getMs());
+      }, delay);
+    };
+    schedule(getMs());
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.length]);
@@ -95,109 +205,53 @@ export default function Slideshow() {
     weekday: 'long', day: 'numeric', month: 'long',
   });
 
-  const Header = () => (
-    <div className="slide-header">
-      <div className="header-left">
-        <Image src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} className="club-logo" priority />
-        <div>
-          <div className="header-club-name">VV <span>Hooglanderveen</span></div>
-          <div className="header-club-sub">Kantine Nieuws</div>
-        </div>
-      </div>
-      <div className="header-right">
-        <span className="slide-date-header">{dateStr}</span>
-        <ClockWidget />
-      </div>
-    </div>
-  );
-
-  if (active.length === 0) {
-    return (
-      <div className="slideshow-root">
-        <div className="slide active">
-          <Header />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="empty-slide">
-              <div className="empty-icon">⚽</div>
-              <p>Geen berichten</p>
-            </div>
-          </div>
-          <div className="slide-footer" />
-        </div>
-      </div>
-    );
-  }
-
-  const idx = current % active.length;
+  const idx = active.length > 0 ? current % active.length : 0;
 
   return (
     <div className="slideshow-root">
-      {/* Progress bar */}
-      <div
-        className="progress-bar"
-        style={{
-          width: `${barWidth}%`,
-          transition: barWidth === 100 ? `width ${SLIDE_MS}ms linear` : 'none',
-        }}
-      />
-
-      {active.map((b, i) => (
-        <div key={b.id} className={`slide${i === idx ? ' active' : ''}`}>
-          <Header />
-
-          <div className={`slide-body${b.image ? ' has-image' : ''}`}>
-            <div className="slide-body-text">
-
-              {/* Categorie badge */}
-              <div className="slide-cat-wrap">
-                <span>{catIcon(b.category)}</span>
-                {catLabel(b.category)}
-              </div>
-
-              {/* Headline — schaalbaar */}
-              <div
-                className={`slide-headline ${headlineSize(b.title, !!b.image)}`}
-                dangerouslySetInnerHTML={{ __html: renderText(b.title) }}
-              />
-
-              {/* Gele balk */}
-              <div className="slide-divider" />
-
-              {/* Body tekst */}
-              {b.content && (
-                <div
-                  className="slide-content"
-                  dangerouslySetInnerHTML={{ __html: renderText(b.content) }}
-                />
-              )}
-
-              {/* Datum */}
-              <div className="slide-date-tag">{fmtDate(b.created_at)}</div>
-            </div>
-
-            {/* Afbeelding */}
-            {b.image && (
-              <div className="slide-img-wrap">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={b.image} alt={b.title} />
-              </div>
-            )}
-          </div>
-
-          <div className="slide-footer">
-            <div className="slide-dots">
-              {active.map((_, di) => (
-                <div key={di} className={`dot${di === i ? ' active' : ''}`} />
-              ))}
-            </div>
-            <div className="slide-counter">
-              <span className="cur-num">{i + 1}</span>
-              <span style={{ opacity: 0.4, margin: '0 2px' }}>/</span>
-              {active.length}
-            </div>
-          </div>
+      {/* Vaste header */}
+      <div className="slide-header">
+        <div className="header-left">
+          <Image src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} className="club-logo" priority />
+          <div className="header-club-name">VV <span>Hooglanderveen</span></div>
         </div>
-      ))}
+        <div className="header-right">
+          <ClockWidget />
+          <span className="header-date">{dateStr}</span>
+        </div>
+      </div>
+
+      {/* Wisselende slide-inhoud */}
+      <div className="slides-viewport">
+        {active.length === 0 ? (
+          <div className="slide-body active">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <div className="empty-slide">
+                <div className="empty-icon">⚽</div>
+                <p>Geen berichten</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          active.map((b, i) => (
+            <div
+              key={b.id}
+              className={`slide-body${b.image ? ' has-image' : ''}${i === idx ? ' active' : ''}`}
+            >
+              <AutoFitContent b={b} />
+              {b.image && (
+                <div className="slide-img-wrap">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={b.image} alt={b.title} />
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Vaste ticker */}
+      <Ticker items={tickerItems} />
 
       <div className="admin-hint">
         <Link href="/beheer">⚙ beheer</Link>

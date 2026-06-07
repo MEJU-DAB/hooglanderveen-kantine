@@ -7,7 +7,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   await initDb();
   const { id } = await params;
   const body = await req.json();
-  const { title, content, category, active, image, sort_order } = body;
+  const { title, content, category, active, ticker, image, sort_order, duration } = body;
 
   const existing = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(id)] });
   if (!existing.rows.length) return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 });
@@ -19,25 +19,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       content    = ?,
       category   = ?,
       active     = ?,
+      ticker     = ?,
       image      = ?,
-      sort_order = ?
+      sort_order = ?,
+      duration   = ?
     WHERE id = ?`,
     args: [
-      title      !== undefined ? title      : cur.title,
-      content    !== undefined ? content    : cur.content,
-      category   !== undefined ? category   : cur.category,
-      active     !== undefined ? (active ? 1 : 0) : cur.active,
-      image      !== undefined ? image      : cur.image,
-      sort_order !== undefined ? sort_order : cur.sort_order,
+      title      !== undefined ? title           : cur.title,
+      content    !== undefined ? content         : cur.content,
+      category   !== undefined ? category        : cur.category,
+      active     !== undefined ? (active ? 1:0)  : cur.active,
+      ticker     !== undefined ? (ticker ? 1:0)  : cur.ticker,
+      image      !== undefined ? image           : cur.image,
+      sort_order !== undefined ? sort_order      : cur.sort_order,
+      duration   !== undefined ? Number(duration): Number(cur.duration ?? 10),
       Number(id),
     ],
   });
 
-  const updated = (await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(id)] })).rows[0];
+  const u = (await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(id)] })).rows[0] as Record<string, unknown>;
   return NextResponse.json({
-    id: Number(updated.id), title: String(updated.title), content: String(updated.content ?? ''),
-    category: updated.category, active: updated.active === 1, image: updated.image ?? null,
-    created_at: updated.created_at, sort_order: Number(updated.sort_order),
+    id: Number(u.id), title: String(u.title), content: String(u.content ?? ''),
+    category: u.category, active: Number(u.active) === 1, ticker: Number(u.ticker ?? 1) === 1,
+    image: u.image ?? null, created_at: u.created_at, sort_order: Number(u.sort_order),
+    duration: Number(u.duration ?? 10),
   });
 }
 

@@ -6,7 +6,9 @@ export interface Bericht {
   content: string;
   category: Category;
   active: boolean;
+  ticker: boolean;
   image: string | null;
   created_at: string;
   sort_order: number;
+  duration: number; // weergaveduur in seconden, default 10
 }

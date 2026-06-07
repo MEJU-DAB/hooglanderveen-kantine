@@ -16,11 +16,14 @@ export async function initDb() {
       content     TEXT    NOT NULL DEFAULT '',
       category    TEXT    NOT NULL DEFAULT 'nieuws',
       active      INTEGER NOT NULL DEFAULT 1,
+      ticker      INTEGER NOT NULL DEFAULT 1,
       image       TEXT,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
       sort_order  INTEGER NOT NULL DEFAULT 0
     );
   `);
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN ticker   INTEGER NOT NULL DEFAULT 1"); } catch {}
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN duration INTEGER NOT NULL DEFAULT 10"); } catch {}
 }
 
 export default db;
