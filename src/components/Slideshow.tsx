@@ -9,7 +9,9 @@ const SLIDE_MS = 10000;
 
 function fmtDate(s: string) {
   try {
-    return new Date(s).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+    return new Date(s).toLocaleDateString('nl-NL', {
+      weekday: 'long', day: 'numeric', month: 'long',
+    });
   } catch { return s; }
 }
 
@@ -29,6 +31,13 @@ function renderText(t: string) {
   return t
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>');
+}
+
+/** Kies headline-grootte op basis van aantal tekens */
+function headlineSize(title: string, hasImage: boolean): string {
+  const len = title.length;
+  if (hasImage) return len < 30 ? 'size-lg' : len < 60 ? 'size-md' : 'size-sm';
+  return len < 20 ? 'size-xl' : len < 40 ? 'size-lg' : len < 70 ? 'size-md' : 'size-sm';
 }
 
 function ClockWidget() {
@@ -66,16 +75,12 @@ export default function Slideshow() {
     setTimeout(() => setBarWidth(100), 50);
   }, []);
 
-  const advance = useCallback((len: number) => {
-    setCurrent(c => (c + 1) % Math.max(len, 1));
-    startBar();
-  }, [startBar]);
-
   useEffect(() => {
     if (active.length === 0) return;
     startBar();
     timerRef.current = setTimeout(function tick() {
-      advance(active.length);
+      setCurrent(c => (c + 1) % active.length);
+      startBar();
       timerRef.current = setTimeout(tick, SLIDE_MS);
     }, SLIDE_MS);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
@@ -86,12 +91,14 @@ export default function Slideshow() {
     if (current >= active.length && active.length > 0) setCurrent(0);
   }, [active.length, current]);
 
-  const dateStr = new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dateStr = new Date().toLocaleDateString('nl-NL', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
 
   const Header = () => (
     <div className="slide-header">
       <div className="header-left">
-        <Image src="/logo.png" alt="VV Hooglanderveen" width={62} height={62} className="club-logo" priority />
+        <Image src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} className="club-logo" priority />
         <div>
           <div className="header-club-name">VV <span>Hooglanderveen</span></div>
           <div className="header-club-sub">Kantine Nieuws</div>
@@ -109,17 +116,13 @@ export default function Slideshow() {
       <div className="slideshow-root">
         <div className="slide active">
           <Header />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div className="empty-slide">
               <div className="empty-icon">⚽</div>
               <p>Geen berichten</p>
-              <span>Voeg berichten toe via /beheer</span>
             </div>
           </div>
-          <div className="slide-footer">
-            <div className="slide-dots" />
-            <div className="slide-counter" />
-          </div>
+          <div className="slide-footer" />
         </div>
       </div>
     );
@@ -129,6 +132,7 @@ export default function Slideshow() {
 
   return (
     <div className="slideshow-root">
+      {/* Progress bar */}
       <div
         className="progress-bar"
         style={{
@@ -143,24 +147,35 @@ export default function Slideshow() {
 
           <div className={`slide-body${b.image ? ' has-image' : ''}`}>
             <div className="slide-body-text">
+
+              {/* Categorie badge */}
               <div className="slide-cat-wrap">
                 <span>{catIcon(b.category)}</span>
                 {catLabel(b.category)}
               </div>
+
+              {/* Headline — schaalbaar */}
               <div
-                className="slide-headline"
+                className={`slide-headline ${headlineSize(b.title, !!b.image)}`}
                 dangerouslySetInnerHTML={{ __html: renderText(b.title) }}
               />
-              <div className="slide-accent-bar" />
+
+              {/* Gele balk */}
+              <div className="slide-divider" />
+
+              {/* Body tekst */}
               {b.content && (
                 <div
                   className="slide-content"
                   dangerouslySetInnerHTML={{ __html: renderText(b.content) }}
                 />
               )}
+
+              {/* Datum */}
               <div className="slide-date-tag">{fmtDate(b.created_at)}</div>
             </div>
 
+            {/* Afbeelding */}
             {b.image && (
               <div className="slide-img-wrap">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -177,7 +192,7 @@ export default function Slideshow() {
             </div>
             <div className="slide-counter">
               <span className="cur-num">{i + 1}</span>
-              <span style={{ opacity: 0.4 }}>/</span>
+              <span style={{ opacity: 0.4, margin: '0 2px' }}>/</span>
               {active.length}
             </div>
           </div>
