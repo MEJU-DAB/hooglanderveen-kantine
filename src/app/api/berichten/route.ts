@@ -26,6 +26,16 @@ export async function GET() {
   return NextResponse.json(result.rows.map(r => toRow(r as Record<string, unknown>)));
 }
 
+/** PATCH /api/berichten — bulk sort_order update [{id, sort_order}] */
+export async function PATCH(req: NextRequest) {
+  await initDb();
+  const items: { id: number; sort_order: number }[] = await req.json();
+  for (const { id, sort_order } of items) {
+    await db.execute({ sql: 'UPDATE berichten SET sort_order = ? WHERE id = ?', args: [sort_order, id] });
+  }
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
   await initDb();
   const body = await req.json();

@@ -92,6 +92,16 @@ const Icons = {
       <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
     </svg>
   ),
+  grip: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="6" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="6" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="9" cy="18" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="18" r="1" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
 };
 
 /* ── helpers ── */
@@ -805,6 +815,36 @@ export default function Beheer() {
     showToast('Bericht verwijderd');
   };
 
+  // ── Drag & drop volgorde ──────────────────────────────────────────────
+  const dragIdx = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  const handleDragStart = (idx: number) => { dragIdx.current = idx; };
+  const handleDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOver(idx); };
+  const handleDragEnd   = () => { dragIdx.current = null; setDragOver(null); };
+
+  const handleDrop = async (dropIdx: number) => {
+    const from = dragIdx.current;
+    if (from === null || from === dropIdx) { setDragOver(null); return; }
+
+    // Herorden de lijst lokaal
+    const reordered = [...berichten];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(dropIdx, 0, moved);
+
+    // Optimistisch updaten
+    setBerichten(reordered);
+    setDragOver(null);
+    dragIdx.current = null;
+
+    // Sla nieuwe sort_order op
+    await fetch('/api/berichten', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reordered.map((b, i) => ({ id: b.id, sort_order: i }))),
+    });
+  };
+
   const patch = async (b: Bericht, changes: Partial<Bericht>) => {
     await fetch(`/api/berichten/${b.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -938,14 +978,31 @@ export default function Beheer() {
             </div>
           ) : (
             <div className="dash-table">
-              <div className="dash-table-head">
+              <div className={`dash-table-head${search ? ' no-drag' : ''}`}>
+                {!search && <div />}
                 <div>Bericht</div>
                 <div>Status</div>
                 <div>Datum</div>
                 <div>Acties</div>
               </div>
-              {filtered.map(b => (
-                <div key={b.id} className={`dash-row${b.active ? '' : ' dash-row-inactive'}`}>
+              {filtered.map((b, idx) => (
+                <div
+                  key={b.id}
+                  className={`dash-row${b.active ? '' : ' dash-row-inactive'}${dragOver === idx ? ' drag-over' : ''}`}
+                  style={search ? { gridTemplateColumns: '1fr 160px 130px 140px', padding: '12px 16px' } : undefined}
+                  draggable={!search}
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={e => handleDragOver(e, idx)}
+                  onDrop={() => handleDrop(idx)}
+                  onDragEnd={handleDragEnd}
+                >
+
+                  {/* Grip handle */}
+                  {!search && (
+                    <div className="dash-row-grip" title="Versleep om volgorde te wijzigen">
+                      {Icons.grip}
+                    </div>
+                  )}
 
                   {/* Bericht info */}
                   <div className="dash-row-info">

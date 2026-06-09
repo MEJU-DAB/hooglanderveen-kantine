@@ -1187,8 +1187,8 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
 
 .dash-table-head {
   display: grid;
-  grid-template-columns: 1fr 160px 130px 140px;
-  padding: 10px 20px;
+  grid-template-columns: 36px 1fr 160px 130px 140px;
+  padding: 10px 16px 10px 8px;
   background: #f7f9fc;
   border-bottom: 1.5px solid var(--border);
   font-size: 0.7rem;
@@ -1197,11 +1197,15 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
   letter-spacing: 0.12em;
   color: var(--muted);
 }
+.dash-table-head.no-drag {
+  grid-template-columns: 1fr 160px 130px 140px;
+  padding: 10px 20px;
+}
 
 .dash-row {
   display: grid;
-  grid-template-columns: 1fr 160px 130px 140px;
-  padding: 13px 20px;
+  grid-template-columns: 36px 1fr 160px 130px 140px;
+  padding: 12px 16px 12px 8px;
   border-bottom: 1px solid var(--border);
   align-items: center;
   transition: background 0.12s;
@@ -1210,6 +1214,21 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
 .dash-row:last-child { border-bottom: none; }
 .dash-row:hover { background: #f5f8ff; }
 .dash-row-inactive { opacity: 0.5; }
+.dash-row.drag-over { background: #eaf1ff; border-color: var(--blue-mid); }
+
+/* Grip handle */
+.dash-row-grip {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--border);
+  cursor: grab;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.dash-row-grip svg { width: 16px; height: 16px; }
+.dash-row:hover .dash-row-grip { color: var(--muted); }
+.dash-row-grip:active { cursor: grabbing; }
 
 .dash-row-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .dash-row-thumb {
