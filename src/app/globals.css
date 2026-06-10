@@ -37,15 +37,14 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #f0f4f8;
-  /* Vaste layout: header | content | footer */
+  background: #f4f5f7;
   display: flex;
   flex-direction: column;
 }
 
 /* ── Vaste header & footer — bewegen niet mee ── */
 .slide-header { flex: 0 0 88px; }
-.slide-footer { flex: 0 0 58px; }
+.slide-footer { flex: 0 0 56px; }
 
 /* ── Viewport voor de wisselende slides ── */
 .slides-viewport {
@@ -53,7 +52,7 @@ body {
   min-height: 0;
   position: relative;
   overflow: hidden;
-  background: #dce8f5;
+  background: #f4f5f7;
 }
 
 /* ── Slide-body: positie absoluut in viewport, alleen content fadet ── */
@@ -74,7 +73,7 @@ body {
 
 /* ── Header ── */
 .slide-header {
-  background: var(--blue-deeper);
+  background: linear-gradient(135deg, #1a2f5e 0%, #0f1f3d 100%);
   display: flex;
   align-items: stretch;
   justify-content: space-between;
@@ -185,8 +184,9 @@ body {
   padding: 0 0 2rem;
   overflow: hidden;
   background: var(--white);
-  box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+  box-shadow: 0 6px 40px rgba(0,0,0,0.13), 0 1px 6px rgba(0,0,0,0.07);
   border-top: 4px solid var(--blue);
+  border-radius: 14px;
 }
 
 /* Content padding na de cat-bar */
@@ -308,12 +308,14 @@ body {
 /* Body text — font-size via JS binary search */
 .slide-content {
   font-family: 'Lato', sans-serif;
-  line-height: 1.45;
+  line-height: 1.7;
   color: var(--ink);
   white-space: normal;
   max-width: 76ch;
   font-weight: 400;
   overflow: hidden;
+  border-left: 4px solid #ffd700;
+  padding-left: 1.4rem;
 }
 /* Alinea-afstand: compact maar leesbaar */
 .slide-content p   { margin: 0 0 0.5em; }
@@ -327,6 +329,7 @@ body {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   line-height: 1;
+  color: #1a2f5e;
 }
 .slide-content em     { color: var(--blue-mid); font-style: normal; font-weight: 600; }
 .slide-content strong { font-weight: 700; color: var(--ink); }
@@ -369,7 +372,7 @@ body {
 
 /* ── Footer / Ticker ── */
 .slide-footer {
-  background: var(--blue-deeper);
+  background: linear-gradient(135deg, #1a2f5e 0%, #0f1f3d 100%);
   display: flex;
   align-items: stretch;
   overflow: hidden;
@@ -415,7 +418,7 @@ body {
   width: 100px;
   z-index: 2;
   pointer-events: none;
-  background: linear-gradient(to left, var(--blue-deeper), transparent);
+  background: linear-gradient(to left, #0f1f3d, transparent);
 }
 
 .ticker-scroll-area {
@@ -458,10 +461,10 @@ body {
 .ticker-item {
   display: inline-flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0 2rem;
+  gap: 1.5rem;
+  padding: 0 2.4rem;
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.55rem;
+  font-size: 1.45rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.9);
