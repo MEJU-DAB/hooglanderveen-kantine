@@ -15,8 +15,9 @@ function toRow(r: Record<string, unknown>): Bericht {
     image:      r.image ? String(r.image) : null,
     created_at: String(r.created_at),
     sort_order: Number(r.sort_order ?? 0),
-    duration:   Number(r.duration ?? 10),
-    font_size:  Number(r.font_size ?? 0),
+    duration:    Number(r.duration ?? 10),
+    font_size:   Number(r.font_size ?? 0),
+    title_size:  Number(r.title_size ?? 0),
   };
 }
 
@@ -39,15 +40,15 @@ export async function PATCH(req: NextRequest) {
 export async function POST(req: NextRequest) {
   await initDb();
   const body = await req.json();
-  const { title, content = '', category = 'nieuws', active = true, ticker = true, image = null, duration = 10, font_size = 0 } = body;
+  const { title, content = '', category = 'nieuws', active = true, ticker = true, image = null, duration = 10, font_size = 0, title_size = 0 } = body;
   if (!title?.trim()) return NextResponse.json({ error: 'Titel is verplicht' }, { status: 400 });
 
   const maxResult = await db.execute('SELECT MAX(sort_order) as m FROM berichten');
   const maxOrder = Number(maxResult.rows[0]?.m ?? 0);
 
   const result = await db.execute({
-    sql: 'INSERT INTO berichten (title, content, category, active, ticker, image, sort_order, duration, font_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    args: [title.trim(), content, category, active ? 1 : 0, ticker ? 1 : 0, image, maxOrder + 1, Number(duration), Number(font_size)],
+    sql: 'INSERT INTO berichten (title, content, category, active, ticker, image, sort_order, duration, font_size, title_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    args: [title.trim(), content, category, active ? 1 : 0, ticker ? 1 : 0, image, maxOrder + 1, Number(duration), Number(font_size), Number(title_size)],
   });
 
   const row = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(result.lastInsertRowid)] });

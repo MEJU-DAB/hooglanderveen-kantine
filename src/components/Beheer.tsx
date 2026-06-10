@@ -132,9 +132,10 @@ interface FormState {
   image: string | null;
   ticker: boolean;
   duration: number;
-  font_size: number; // rem override bodytekst, 0 = auto
+  font_size: number;   // rem override bodytekst, 0 = auto
+  title_size: number;  // rem override titelgrootte, 0 = auto
 }
-const emptyForm = (): FormState => ({ title: '', content: '', image: null, ticker: true, duration: DEFAULT_DURATION, font_size: 0 });
+const emptyForm = (): FormState => ({ title: '', content: '', image: null, ticker: true, duration: DEFAULT_DURATION, font_size: 0, title_size: 0 });
 
 /* ── Toast ── */
 function Toast({ msg, err, show }: { msg: string; err: boolean; show: boolean }) {
@@ -329,19 +330,20 @@ const PREVIEW_SCALE = 0.5;
 const PREVIEW_W = Math.round(1920 * PREVIEW_SCALE); // 960
 const PREVIEW_H = Math.round(1080 * PREVIEW_SCALE); // 540
 
-function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSizeChange, onSave, onClose }: {
+function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeOverride, onFontSizeChange, onTitleSizeChange, onSave, onClose }: {
   title: string;
   content: string;
   image: string | null;
   fontSizeOverride: number;
+  titleSizeOverride: number;
   onFontSizeChange: (v: number) => void;
+  onTitleSizeChange: (v: number) => void;
   onSave: () => void;
   onClose: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(PREVIEW_SCALE);
 
-  // Pas schaal aan op breedte van het scherm
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -349,8 +351,10 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSize
     setScale(fit);
   }, []);
 
-  const sliderVal = fontSizeOverride > 0 ? fontSizeOverride : 1.5;
-  const isAuto = fontSizeOverride === 0;
+  const bodySliderVal  = fontSizeOverride  > 0 ? fontSizeOverride  : 1.5;
+  const titleSliderVal = titleSizeOverride > 0 ? titleSizeOverride : 4.0;
+  const bodyAuto  = fontSizeOverride  === 0;
+  const titleAuto = titleSizeOverride === 0;
 
   return (
     <div className="preview-overlay" onClick={onClose}>
@@ -365,7 +369,6 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSize
         {/* Scaled slide */}
         <div ref={stageRef} className="preview-stage" style={{ height: Math.round(1080 * scale) }}>
           <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute' }}>
-            {/* Volledige slideshow structuur zodat auto-fit identiek is aan het echte scherm */}
             <div className="slideshow-root" style={{ width: 1920, height: 1080 }}>
               <div className="slide-header">
                 <div className="header-left">
@@ -384,6 +387,7 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSize
                     content={content}
                     image={image}
                     fontSizeOverride={fontSizeOverride}
+                    titleSizeOverride={titleSizeOverride}
                   />
                   {image && (
                     <div className="slide-img-wrap">
@@ -400,41 +404,40 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, onFontSize
           </div>
         </div>
 
-        {/* Tekstgrootte bediening */}
+        {/* Grootte bediening */}
         <div className="preview-controls">
+          {/* Titelgrootte */}
           <div className="preview-controls-row">
-            <span className="preview-controls-label">Tekstgrootte:</span>
-            <button
-              type="button"
-              className={`btn btn-sm${isAuto ? ' btn-yellow' : ' btn-ghost'}`}
-              onClick={() => onFontSizeChange(0)}
-            >
-              Auto
-            </button>
-            <input
-              type="range"
-              min={0.9} max={3.5} step={0.05}
-              value={sliderVal}
-              onChange={e => onFontSizeChange(Number(e.target.value))}
-              className="preview-slider"
-            />
+            <span className="preview-controls-label">Titelgrootte:</span>
+            <button type="button" className={`btn btn-sm${titleAuto ? ' btn-yellow' : ' btn-ghost'}`}
+              onClick={() => onTitleSizeChange(0)}>Auto</button>
+            <input type="range" min={1.2} max={8} step={0.1}
+              value={titleSliderVal}
+              onChange={e => onTitleSizeChange(Number(e.target.value))}
+              className="preview-slider" />
             <span className="preview-size-val">
-              {isAuto ? <em>auto-fit</em> : `${fontSizeOverride.toFixed(2)} rem`}
+              {titleAuto ? <em>auto-fit</em> : `${titleSizeOverride.toFixed(1)} rem`}
             </span>
           </div>
-          {!isAuto && (
-            <div className="preview-controls-hint">
-              Schuif de slider om de tekstgrootte aan te passen. Klik <strong>Auto</strong> om terug te gaan naar automatisch.
-            </div>
-          )}
+          {/* Tekstgrootte */}
+          <div className="preview-controls-row">
+            <span className="preview-controls-label">Tekstgrootte:</span>
+            <button type="button" className={`btn btn-sm${bodyAuto ? ' btn-yellow' : ' btn-ghost'}`}
+              onClick={() => onFontSizeChange(0)}>Auto</button>
+            <input type="range" min={0.9} max={3.5} step={0.05}
+              value={bodySliderVal}
+              onChange={e => onFontSizeChange(Number(e.target.value))}
+              className="preview-slider" />
+            <span className="preview-size-val">
+              {bodyAuto ? <em>auto-fit</em> : `${fontSizeOverride.toFixed(2)} rem`}
+            </span>
+          </div>
         </div>
 
         {/* Acties */}
         <div className="preview-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>Sluiten</button>
-          <button type="button" className="btn btn-yellow" onClick={onSave}>
-            {isAuto ? 'Opslaan (auto-fit)' : `Opslaan (${fontSizeOverride.toFixed(2)} rem)`}
-          </button>
+          <button type="button" className="btn btn-yellow" onClick={onSave}>Opslaan</button>
         </div>
       </div>
     </div>
@@ -453,6 +456,7 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   const [showPages, setShowPages] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFontSize, setPreviewFontSize] = useState(0);
+  const [previewTitleSize, setPreviewTitleSize] = useState(0);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -489,7 +493,7 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           <button
             type="button"
             className="btn btn-blue btn-sm preview-open-btn"
-            onClick={() => { setPreviewFontSize(form.font_size); setPreviewOpen(true); }}
+            onClick={() => { setPreviewFontSize(form.font_size); setPreviewTitleSize(form.title_size); setPreviewOpen(true); }}
           >
             👁 Schermpreview{form.font_size > 0 ? ` (${form.font_size.toFixed(2)} rem)` : ' (auto)'}
           </button>
@@ -509,8 +513,10 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           content={form.content}
           image={form.image}
           fontSizeOverride={previewFontSize}
+          titleSizeOverride={previewTitleSize}
           onFontSizeChange={setPreviewFontSize}
-          onSave={() => { set('font_size', previewFontSize); setPreviewOpen(false); }}
+          onTitleSizeChange={setPreviewTitleSize}
+          onSave={() => { set('font_size', previewFontSize); set('title_size', previewTitleSize); setPreviewOpen(false); }}
           onClose={() => setPreviewOpen(false)}
         />
       )}
@@ -575,7 +581,7 @@ function EditDrawer({ bericht, onSave, onClose }: {
         </div>
         <div className="drawer-body">
           <BerichtForm
-            initial={{ title: bericht.title, content: bericht.content, image: bericht.image, ticker: bericht.ticker, duration: bericht.duration ?? DEFAULT_DURATION, font_size: bericht.font_size ?? 0 }}
+            initial={{ title: bericht.title, content: bericht.content, image: bericht.image, ticker: bericht.ticker, duration: bericht.duration ?? DEFAULT_DURATION, font_size: bericht.font_size ?? 0, title_size: bericht.title_size ?? 0 }}
             onSave={onSave}
             onCancel={onClose}
             saveLabel="Wijzigingen opslaan"
@@ -733,6 +739,7 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
                   ticker: true,
                   duration: DEFAULT_DURATION,
                   font_size: 0,
+                  title_size: 0,
                 }}
                 onSave={handlePublish}
                 onCancel={() => setEditing(null)}

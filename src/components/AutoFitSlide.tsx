@@ -7,15 +7,11 @@ export interface AutoFitSlideProps {
   title: string;
   content: string;
   image: string | null;
-  fontSizeOverride?: number; // rem, 0 = auto-fit
+  fontSizeOverride?: number;  // rem, 0 = auto-fit (body)
+  titleSizeOverride?: number; // rem, 0 = auto-fit (title)
 }
 
-/**
- * Rendert titel + body met twee onafhankelijke binary searches.
- * Als fontSizeOverride > 0 wordt die waarde gebruikt voor de bodytekst
- * (titel blijft altijd auto-fit zodat hij nooit afgeknipte regels heeft).
- */
-export function AutoFitSlide({ title, content, image, fontSizeOverride = 0 }: AutoFitSlideProps) {
+export function AutoFitSlide({ title, content, image, fontSizeOverride = 0, titleSizeOverride = 0 }: AutoFitSlideProps) {
   const wrapRef    = useRef<HTMLDivElement>(null);
   const titleRef   = useRef<HTMLDivElement>(null);
   const gapRef     = useRef<HTMLDivElement>(null);
@@ -38,14 +34,25 @@ export function AutoFitSlide({ title, content, image, fontSizeOverride = 0 }: Au
 
     // ── Stap 1: titelgrootte ─────────────────────────────────────────────
     const titleMaxLines = content ? 2.4 : 10;
-    let tlo = MIN_TITLE, thi = MAX_TITLE;
-    for (let i = 0; i < 14; i++) {
-      const mid = (tlo + thi) / 2;
-      titleEl.style.fontSize = `${mid}rem`;
-      const oneLinePx = mid * 16 * 0.9;
-      if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) tlo = mid; else thi = mid;
+    if (titleSizeOverride > 0) {
+      let tlo = 0.5, thi = titleSizeOverride;
+      for (let i = 0; i < 12; i++) {
+        const mid = (tlo + thi) / 2;
+        titleEl.style.fontSize = `${mid}rem`;
+        const oneLinePx = mid * 16 * 0.9;
+        if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) tlo = mid; else thi = mid;
+      }
+      titleEl.style.fontSize = `${tlo}rem`;
+    } else {
+      let tlo = MIN_TITLE, thi = MAX_TITLE;
+      for (let i = 0; i < 14; i++) {
+        const mid = (tlo + thi) / 2;
+        titleEl.style.fontSize = `${mid}rem`;
+        const oneLinePx = mid * 16 * 0.9;
+        if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) tlo = mid; else thi = mid;
+      }
+      titleEl.style.fontSize = `${tlo}rem`;
     }
-    titleEl.style.fontSize = `${tlo}rem`;
 
     // ── Stap 2: bodytekstgrootte ─────────────────────────────────────────
     if (bodyEl) {
@@ -72,7 +79,7 @@ export function AutoFitSlide({ title, content, image, fontSizeOverride = 0 }: Au
         bodyEl.style.fontSize = `${blo}rem`;
       }
     }
-  }, [title, content, image, fontSizeOverride, MAX_TITLE, MAX_BODY, MIN_TITLE, MIN_BODY]);
+  }, [title, content, image, fontSizeOverride, titleSizeOverride, MAX_TITLE, MAX_BODY, MIN_TITLE, MIN_BODY]);
 
   return (
     <div ref={wrapRef} className="slide-text-wrap">

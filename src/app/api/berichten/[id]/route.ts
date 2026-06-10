@@ -7,7 +7,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   await initDb();
   const { id } = await params;
   const body = await req.json();
-  const { title, content, category, active, ticker, image, sort_order, duration, font_size } = body;
+  const { title, content, category, active, ticker, image, sort_order, duration, font_size, title_size } = body;
 
   const existing = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(id)] });
   if (!existing.rows.length) return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 });
@@ -23,7 +23,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       image      = ?,
       sort_order = ?,
       duration   = ?,
-      font_size  = ?
+      font_size  = ?,
+      title_size = ?
     WHERE id = ?`,
     args: [
       title      !== undefined ? title              : cur.title,
@@ -35,6 +36,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       sort_order !== undefined ? sort_order         : cur.sort_order,
       duration   !== undefined ? Number(duration)   : Number(cur.duration ?? 10),
       font_size  !== undefined ? Number(font_size)  : Number(cur.font_size ?? 0),
+      title_size !== undefined ? Number(title_size) : Number(cur.title_size ?? 0),
       Number(id),
     ],
   });
@@ -44,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     id: Number(u.id), title: String(u.title), content: String(u.content ?? ''),
     category: u.category, active: Number(u.active) === 1, ticker: Number(u.ticker ?? 1) === 1,
     image: u.image ?? null, created_at: u.created_at, sort_order: Number(u.sort_order),
-    duration: Number(u.duration ?? 10), font_size: Number(u.font_size ?? 0),
+    duration: Number(u.duration ?? 10), font_size: Number(u.font_size ?? 0), title_size: Number(u.title_size ?? 0),
   });
 }
 

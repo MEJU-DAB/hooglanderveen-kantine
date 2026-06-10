@@ -193,6 +193,7 @@ export default function Slideshow() {
                   content={b.content}
                   image={b.image}
                   fontSizeOverride={b.font_size ?? 0}
+                  titleSizeOverride={b.title_size ?? 0}
                 />
               </div>
 
