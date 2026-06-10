@@ -369,19 +369,32 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
         {/* Scaled slide */}
         <div ref={stageRef} className="preview-stage" style={{ height: Math.round(1080 * scale) }}>
           <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute' }}>
+            {/* Identieke structuur als de echte Slideshow — elke afwijking
+                veroorzaakt een verschil in gemeten hoogte / breedte en dus
+                een ander resultaat van de binary search. */}
             <div className="slideshow-root" style={{ width: 1920, height: 1080 }}>
               <div className="slide-header">
-                <div className="header-left">
+                <div className="header-logo-block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} style={{ objectFit: 'contain' }} />
-                  <div className="header-club-name">VV <span>Hooglanderveen</span></div>
+                  <img src="/logo.png" alt="VV Hooglanderveen" width={54} height={54}
+                    className="club-logo" style={{ objectFit: 'contain' }} />
+                  <div className="header-club-name">
+                    VV Hooglanderveen
+                    <span>Clubnieuws</span>
+                  </div>
                 </div>
+                <div className="header-middle" />
                 <div className="header-right">
-                  <span className="header-date">Schermpreview</span>
+                  <div className="header-divider" />
+                  <div className="header-time-block">
+                    <span className="slide-time">00:00</span>
+                    <span className="header-date">Schermpreview</span>
+                  </div>
                 </div>
               </div>
               <div className="slides-viewport">
                 <div className={`slide-body active${image ? ' has-image' : ''}`}>
+                  {/* Geen cat-bar (preview toont altijd pagina 1) */}
                   <div className="slide-text-outer">
                     <AutoFitSlide
                       title={title || '(geen titel)'}
@@ -400,6 +413,7 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
                 </div>
               </div>
               <div className="slide-footer slide-footer-static">
+                <div className="ticker-label"><span>Nieuws</span></div>
                 <span className="ticker-welcome">Welkom bij VV Hooglanderveen</span>
               </div>
             </div>

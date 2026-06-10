@@ -23,63 +23,71 @@ export function AutoFitSlide({ title, content, image, fontSizeOverride = 0, titl
   const MIN_BODY  = 0.95;
 
   useLayoutEffect(() => {
-    const wrap    = wrapRef.current;
-    const titleEl = titleRef.current;
-    const gapEl   = gapRef.current;
-    const bodyEl  = contentRef.current;
-    if (!wrap || !titleEl) return;
+    const run = () => {
+      const wrap    = wrapRef.current;
+      const titleEl = titleRef.current;
+      const gapEl   = gapRef.current;
+      const bodyEl  = contentRef.current;
+      if (!wrap || !titleEl) return;
 
-    const avail = wrap.clientHeight;
-    if (avail <= 0) return;
+      const avail = wrap.clientHeight;
+      if (avail <= 0) return;
 
-    // ── Stap 1: titelgrootte ─────────────────────────────────────────────
-    const titleMaxLines = content ? 2.4 : 10;
-    if (titleSizeOverride > 0) {
-      let tlo = 0.5, thi = titleSizeOverride;
-      for (let i = 0; i < 12; i++) {
-        const mid = (tlo + thi) / 2;
-        titleEl.style.fontSize = `${mid}rem`;
-        const oneLinePx = mid * 16 * 0.9;
-        if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) tlo = mid; else thi = mid;
-      }
-      titleEl.style.fontSize = `${tlo}rem`;
-    } else {
-      let tlo = MIN_TITLE, thi = MAX_TITLE;
-      for (let i = 0; i < 14; i++) {
-        const mid = (tlo + thi) / 2;
-        titleEl.style.fontSize = `${mid}rem`;
-        const oneLinePx = mid * 16 * 0.9;
-        if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) tlo = mid; else thi = mid;
-      }
-      titleEl.style.fontSize = `${tlo}rem`;
-    }
+      // Gebruik de werkelijke rootfontgrootte (niet hardcoded 16px).
+      // Dit is belangrijk als de browser of het OS een andere basisgrootte heeft.
+      const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // line-height van .slide-headline is 0.92 (zie globals.css)
+      const HEADLINE_LH = 0.92;
 
-    // ── Stap 2: bodytekstgrootte ─────────────────────────────────────────
-    if (bodyEl) {
-      const titleH    = titleEl.getBoundingClientRect().height;
-      const gapH      = gapEl ? gapEl.getBoundingClientRect().height : 18;
-      const remaining = avail - titleH - gapH - 16; // extra buffer voor padding/borders
+      // ── Stap 1: titelgrootte ───────────────────────────────────────────
+      // titleMaxLines: met body-inhoud max 2.4 regels, anders vul scherm
+      const titleMaxLines = content ? 2.4 : 10;
 
-      if (fontSizeOverride > 0) {
-        // Override: binary search om te garanderen dat het past
-        let blo = 0.5, bhi = fontSizeOverride;
-        for (let i = 0; i < 12; i++) {
-          const mid = (blo + bhi) / 2;
-          bodyEl.style.fontSize = `${mid}rem`;
-          if (bodyEl.scrollHeight <= remaining) blo = mid; else bhi = mid;
-        }
-        bodyEl.style.fontSize = `${blo}rem`;
-      } else {
-        let blo = MIN_BODY, bhi = MAX_BODY;
+      const fitTitle = (lo: number, hi: number) => {
         for (let i = 0; i < 14; i++) {
-          const mid = (blo + bhi) / 2;
-          bodyEl.style.fontSize = `${mid}rem`;
-          if (bodyEl.scrollHeight <= remaining) blo = mid; else bhi = mid;
+          const mid = (lo + hi) / 2;
+          titleEl.style.fontSize = `${mid}rem`;
+          const oneLinePx = mid * rootPx * HEADLINE_LH;
+          if (titleEl.scrollHeight <= oneLinePx * titleMaxLines + 4) lo = mid; else hi = mid;
         }
-        bodyEl.style.fontSize = `${blo}rem`;
+        titleEl.style.fontSize = `${lo}rem`;
+      };
+
+      fitTitle(
+        0.5,
+        titleSizeOverride > 0 ? titleSizeOverride : MAX_TITLE,
+      );
+
+      // ── Stap 2: bodytekstgrootte ───────────────────────────────────────
+      if (bodyEl) {
+        const titleH    = titleEl.getBoundingClientRect().height;
+        const gapH      = gapEl ? gapEl.getBoundingClientRect().height : 18;
+        const remaining = avail - titleH - gapH - 16;
+
+        const fitBody = (lo: number, hi: number) => {
+          for (let i = 0; i < 14; i++) {
+            const mid = (lo + hi) / 2;
+            bodyEl.style.fontSize = `${mid}rem`;
+            if (bodyEl.scrollHeight <= remaining) lo = mid; else hi = mid;
+          }
+          bodyEl.style.fontSize = `${lo}rem`;
+        };
+
+        fitBody(
+          0.5,
+          fontSizeOverride > 0 ? fontSizeOverride : MAX_BODY,
+        );
       }
+    };
+
+    run();
+
+    // Opnieuw meten zodra webfonts geladen zijn (fallback-fonts hebben
+    // andere metrics waardoor de eerste meting verkeerd kan zijn).
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(run);
     }
-  }, [title, content, image, fontSizeOverride, titleSizeOverride, MAX_TITLE, MAX_BODY, MIN_TITLE, MIN_BODY]);
+  }, [title, content, image, fontSizeOverride, titleSizeOverride, MAX_TITLE, MAX_BODY]);
 
   return (
     <div ref={wrapRef} className="slide-text-wrap">
