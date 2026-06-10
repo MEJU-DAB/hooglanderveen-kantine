@@ -631,6 +631,12 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
   gap: 8px;
   letter-spacing: 0.02em;
 }
+.btn:focus-visible {
+  outline: 2px solid var(--blue-mid);
+  outline-offset: 2px;
+}
+.btn-red:focus-visible { outline-color: var(--red); }
+.btn-yellow:focus-visible { outline-color: var(--yellow-dark); }
 .btn-primary { background: var(--blue); color: var(--white); box-shadow: 0 2px 8px rgba(14,61,110,0.2); }
 .btn-primary:hover { background: var(--blue-mid); box-shadow: 0 4px 14px rgba(26,95,168,0.35); transform: translateY(-1px); }
 .btn-yellow { background: var(--yellow); color: var(--blue); box-shadow: 0 2px 8px rgba(245,200,0,0.25); }
@@ -649,6 +655,7 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
   display: inline-flex; align-items: center;
 }
 .btn-icon:hover { color: var(--ink); background: var(--off-white); }
+.btn-icon:focus-visible { outline: 2px solid var(--blue-mid); outline-offset: 2px; }
 
 /* Toolbar */
 .toolbar {
@@ -1250,6 +1257,10 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
 .dash-toggle {
   display: inline-flex; align-items: center; gap: 7px;
   cursor: pointer; user-select: none;
+}
+.dash-toggle:focus-within .dash-toggle-track {
+  outline: 2px solid var(--blue-mid);
+  outline-offset: 1px;
 }
 .dash-toggle input { display: none; }
 .dash-toggle-track {

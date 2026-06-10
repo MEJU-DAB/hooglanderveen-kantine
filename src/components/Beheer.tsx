@@ -571,7 +571,7 @@ function EditDrawer({ bericht, onSave, onClose }: {
       <div className="drawer">
         <div className="drawer-header">
           <div className="drawer-title">Bericht bewerken</div>
-          <button className="btn-icon drawer-close" onClick={onClose}>✕</button>
+          <button className="btn-icon drawer-close" onClick={onClose} aria-label="Sluiten">✕</button>
         </div>
         <div className="drawer-body">
           <BerichtForm
@@ -716,7 +716,7 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
           <div className="drawer">
             <div className="drawer-header">
               <div className="drawer-title">Bewerken & publiceren</div>
-              <button className="btn-icon drawer-close" onClick={() => setEditing(null)}>✕</button>
+              <button className="btn-icon drawer-close" onClick={() => setEditing(null)} aria-label="Sluiten">✕</button>
             </div>
             <div className="drawer-body">
               <div className="rss-source-note">
@@ -1044,11 +1044,11 @@ export default function Beheer() {
 
                   {/* Acties */}
                   <div className="dash-row-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} title="Bewerken">
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} aria-label={`Bewerken: ${b.title}`}>
                       <span className="btn-icon-svg">{Icons.pencil}</span>
                       Bewerken
                     </button>
-                    <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} title="Verwijderen">
+                    <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} aria-label={`Verwijderen: ${b.title}`}>
                       <span className="btn-icon-svg">{Icons.trash}</span>
                     </button>
                   </div>
@@ -1068,7 +1068,7 @@ export default function Beheer() {
           <div className="drawer">
             <div className="drawer-header">
               <div className="drawer-title">Nieuw bericht</div>
-              <button className="btn-icon drawer-close" onClick={() => setNewOpen(false)}>✕</button>
+              <button className="btn-icon drawer-close" onClick={() => setNewOpen(false)} aria-label="Sluiten">✕</button>
             </div>
             <div className="drawer-body">
               <BerichtForm onSave={handleAdd} onCancel={() => setNewOpen(false)} saveLabel="Bericht toevoegen" />
