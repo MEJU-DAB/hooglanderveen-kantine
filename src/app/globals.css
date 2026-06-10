@@ -62,12 +62,14 @@ body {
   inset: 10px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transform: translateY(14px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
   border-radius: 12px;
 }
 .slide-body.active {
   opacity: 1;
   pointer-events: auto;
+  transform: translateY(0);
 }
 
 /* ── Header ── */
@@ -180,10 +182,20 @@ body {
   /* fade-positie: position:absolute + opacity komen uit .slides-viewport regels */
   display: flex;
   flex-direction: column;
-  padding: 2rem 4rem 2rem 4.5rem;
+  padding: 0 0 2rem;
   overflow: hidden;
   background: var(--white);
   box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+  border-top: 4px solid var(--blue);
+}
+
+/* Content padding na de cat-bar */
+.slide-text-outer {
+  padding: 0 4rem 0 4.5rem;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 
@@ -197,13 +209,23 @@ body {
   justify-content: center;
 }
 
-/* With image: two columns; tekst-kolom strekt zich uit over volle hoogte */
+/* With image: two columns; cat-bar spant over beide kolommen */
 .slide-body.has-image {
   display: grid;
   grid-template-columns: 1fr 40%;
-  grid-template-rows: 1fr;
-  gap: 3rem;
+  grid-template-rows: auto 1fr;
+  gap: 0 3rem;
   align-items: stretch;
+}
+.slide-body.has-image .slide-cat-bar {
+  grid-column: 1 / -1;
+}
+.slide-body.has-image .slide-text-outer {
+  padding-left: 4.5rem;
+  padding-right: 0;
+}
+.slide-body.has-image .slide-img-wrap {
+  padding: 0 2rem 2rem 0;
 }
 
 .slide-body-text {
@@ -213,22 +235,41 @@ body {
   min-width: 0;
 }
 
-/* Category badge */
-.slide-cat-wrap {
+/* Categorie-badge boven de slide */
+.slide-cat-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 4rem 0 4.5rem;
+  flex-shrink: 0;
+}
+.slide-cat-badge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   background: var(--blue);
   color: var(--yellow);
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  padding: 5px 14px;
+  padding: 4px 14px 3px;
   border-radius: 3px;
-  align-self: flex-start;
 }
+.slide-cat-badge::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--yellow);
+  flex-shrink: 0;
+}
+.slide-page-indicator {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+}
+.slide-page-indicator span { color: var(--blue); }
 
 /* Headline — font-size via JS binary search */
 .slide-headline {
@@ -248,10 +289,20 @@ body {
   font-style: normal;
 }
 
-/* Ruimte tussen titel en artikel — geen zichtbare lijn */
+/* Accentlijn + ruimte tussen titel en artikel */
 .slide-title-gap {
   height: 1.8rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.slide-title-gap::before {
+  content: '';
+  width: 52px;
+  height: 3px;
+  background: var(--yellow);
+  display: block;
+  border-radius: 2px;
 }
 
 /* Body text — font-size via JS binary search */
@@ -419,9 +470,9 @@ body {
 .ticker-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
   background: var(--yellow);
   flex-shrink: 0;
+  transform: rotate(45deg);
 }
 
 

@@ -178,12 +178,24 @@ export default function Slideshow() {
               key={b.id}
               className={`slide-body${b.image ? ' has-image' : ''}${i === idx ? ' active' : ''}`}
             >
-              <AutoFitSlide
-                title={b.title}
-                content={b.content}
-                image={b.image}
-                fontSizeOverride={b.font_size ?? 0}
-              />
+              {/* Pagina-indicator voor gesplitste artikelen */}
+              {b._pages > 1 && (
+                <div className="slide-cat-bar">
+                  <span className="slide-page-indicator">
+                    <span>{b._page}</span> / {b._pages}
+                  </span>
+                </div>
+              )}
+
+              <div className="slide-text-outer">
+                <AutoFitSlide
+                  title={b.title}
+                  content={b.content}
+                  image={b.image}
+                  fontSizeOverride={b.font_size ?? 0}
+                />
+              </div>
+
               {b.image && (
                 <div className="slide-img-wrap">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
