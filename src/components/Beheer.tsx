@@ -102,6 +102,39 @@ const Icons = {
       <circle cx="15" cy="18" r="1" fill="currentColor" stroke="none"/>
     </svg>
   ),
+  xMark: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  ),
+  camera: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+  ),
+  clock: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  check: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  ),
+  link: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+    </svg>
+  ),
+  spinner: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+      <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0" opacity=".25"/>
+      <path d="M21 12a9 9 0 01-9 9"/>
+    </svg>
+  ),
 };
 
 /* ── helpers ── */
@@ -156,7 +189,9 @@ function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: 
         <div className="img-preview-wrap">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={value} alt="preview" />
-          <button className="img-remove" onClick={() => onChange(null)} type="button">✕</button>
+          <button className="img-remove" onClick={() => onChange(null)} type="button" aria-label="Afbeelding verwijderen">
+            <span className="btn-icon-svg">{Icons.xMark}</span>
+          </button>
         </div>
       ) : (
         <div className="img-upload-area"
@@ -165,7 +200,8 @@ function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: 
           onClick={() => inputRef.current?.click()}>
           <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          <p>📷 <strong>Klik</strong> of sleep een afbeelding</p>
+          <div className="img-upload-icon">{Icons.camera}</div>
+          <p><strong>Klik</strong> of sleep een afbeelding</p>
         </div>
       )}
     </div>
@@ -247,13 +283,13 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <div className="tip-group">
         {btn(editor.isActive('blockquote'), () => editor.chain().focus().toggleBlockquote().run(), '❝', 'Citaat')}
         {btn(false, () => editor.chain().focus().setHorizontalRule().run(), '─', 'Lijn')}
-        {btn(editor.isActive('link'),       setLink,                                               '🔗', 'Link invoegen')}
+        {btn(editor.isActive('link'),       setLink, <span className="btn-icon-svg" style={{width:14,height:14}}>{Icons.link}</span>, 'Link invoegen')}
       </div>
       <span className="tip-sep" />
 
       {/* Clear */}
       <div className="tip-group">
-        {btn(false, () => editor.chain().focus().clearNodes().unsetAllMarks().run(), '✕ opmaak', 'Opmaak verwijderen', true)}
+        {btn(false, () => editor.chain().focus().clearNodes().unsetAllMarks().run(), 'Opmaak wissen', 'Opmaak verwijderen', true)}
       </div>
     </div>
   );
@@ -363,7 +399,7 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
         {/* Header */}
         <div className="preview-panel-header">
           <span className="preview-panel-title">Schermpreview</span>
-          <button type="button" className="btn-icon" onClick={onClose}>✕</button>
+          <button type="button" className="btn-icon" onClick={onClose} aria-label="Sluiten"><span className="btn-icon-svg">{Icons.xMark}</span></button>
         </div>
 
         {/* Scaled slide */}
@@ -483,14 +519,16 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   };
 
   const hasContent = stripTags(form.content).length > 0;
+  // Stabiele ID-prefix per formulierinstantie (nieuw vs. bewerken)
+  const uid = initial ? 'edit' : 'new';
 
   return (
     <form onSubmit={handleSubmit} className="bericht-form">
 
       {/* Titel */}
       <div className="form-section">
-        <label className="form-label">Titel <span className="required">*</span></label>
-        <input className="form-input form-input-lg"
+        <label htmlFor={`${uid}-title`} className="form-label">Titel <span className="required">*</span></label>
+        <input id={`${uid}-title`} className="form-input form-input-lg"
           value={form.title}
           onChange={e => set('title', e.target.value)}
           placeholder="Grote kop op het nieuwsscherm"
@@ -499,7 +537,7 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
 
       {/* Tekst */}
       <div className="form-section">
-        <label className="form-label">Berichttekst</label>
+        <label className="form-label" id={`${uid}-content-label`}>Berichttekst</label>
         <RichEditor value={form.content} onChange={v => set('content', v)} />
       </div>
 
@@ -511,7 +549,8 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
             className="btn btn-blue btn-sm preview-open-btn"
             onClick={() => { setPreviewFontSize(form.font_size); setPreviewTitleSize(form.title_size); setPreviewOpen(true); }}
           >
-            👁 Schermpreview{form.font_size > 0 ? ` (${form.font_size.toFixed(2)} rem)` : ' (auto)'}
+            <span className="btn-icon-svg">{Icons.eye}</span>
+            Schermpreview
           </button>
           {hasContent && (
             <button type="button" className="btn btn-ghost btn-sm"
@@ -549,7 +588,10 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           <label className="ticker-option-label">
             <input type="checkbox" checked={form.ticker} onChange={e => set('ticker', e.target.checked)} />
             <span className="ticker-option-text">
-              <span>📢 Titel meedraaien in de ticker</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="btn-icon-svg">{Icons.megaphone}</span>
+                Titel meedraaien in de ticker
+              </span>
               <span className="ticker-option-sub">Titel verschijnt in de scrollbalk onderaan het scherm</span>
             </span>
           </label>
@@ -558,7 +600,10 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
 
       {/* Weergaveduur */}
       <div className="form-section">
-        <label className="form-label">⏱ Weergaveduur</label>
+        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="btn-icon-svg" style={{ width: 14, height: 14 }}>{Icons.clock}</span>
+          Weergaveduur
+        </label>
         <div className="duration-value">
           <input
             type="number" min={5} max={60} step={1}
@@ -573,7 +618,8 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
 
       <div className="form-actions">
         <button type="submit" className="btn btn-yellow" disabled={saving}>
-          {saving ? '⏳ Opslaan…' : `✔ ${saveLabel}`}
+          <span className="btn-icon-svg">{saving ? Icons.spinner : Icons.check}</span>
+          {saving ? 'Opslaan…' : saveLabel}
         </button>
         {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel}>Annuleren</button>}
       </div>
@@ -593,7 +639,7 @@ function EditDrawer({ bericht, onSave, onClose }: {
       <div className="drawer">
         <div className="drawer-header">
           <div className="drawer-title">Bericht bewerken</div>
-          <button className="btn-icon drawer-close" onClick={onClose} aria-label="Sluiten">✕</button>
+          <button className="btn-icon drawer-close" onClick={onClose} aria-label="Sluiten"><span className="btn-icon-svg">{Icons.xMark}</span></button>
         </div>
         <div className="drawer-body">
           <BerichtForm
@@ -738,11 +784,12 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
           <div className="drawer">
             <div className="drawer-header">
               <div className="drawer-title">Bewerken & publiceren</div>
-              <button className="btn-icon drawer-close" onClick={() => setEditing(null)} aria-label="Sluiten">✕</button>
+              <button className="btn-icon drawer-close" onClick={() => setEditing(null)} aria-label="Sluiten"><span className="btn-icon-svg">{Icons.xMark}</span></button>
             </div>
             <div className="drawer-body">
               <div className="rss-source-note">
-                📡 Bron: RSS feed vvhooglanderveen.nl
+                <span className="btn-icon-svg" style={{ display: 'inline-flex', marginRight: 4 }}>{Icons.rss}</span>
+                Bron: RSS feed vvhooglanderveen.nl
                 {editing.link && (
                   <a href={editing.link} target="_blank" rel="noreferrer"> — bekijk origineel ↗</a>
                 )}
@@ -985,7 +1032,7 @@ export default function Beheer() {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {search && <button className="dash-search-clear" onClick={() => setSearch('')}>✕</button>}
+            {search && <button className="dash-search-clear" onClick={() => setSearch('')} aria-label="Zoekopdracht wissen"><span className="btn-icon-svg" style={{width:12,height:12}}>{Icons.xMark}</span></button>}
           </div>
           <div className="dash-result-count">{filtered.length} bericht{filtered.length !== 1 ? 'en' : ''}</div>
         </div>
@@ -1062,7 +1109,10 @@ export default function Beheer() {
                   {/* Datum + duur */}
                   <div className="dash-row-date">
                     <div>{fmtDate(b.created_at)}</div>
-                    <div className="dash-duration-badge">⏱ {b.duration ?? DEFAULT_DURATION}s</div>
+                    <div className="dash-duration-badge" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 11, height: 11, display: 'inline-flex', flexShrink: 0 }}>{Icons.clock}</span>
+                      {b.duration ?? DEFAULT_DURATION}s
+                    </div>
                   </div>
 
                   {/* Acties */}
@@ -1091,7 +1141,7 @@ export default function Beheer() {
           <div className="drawer">
             <div className="drawer-header">
               <div className="drawer-title">Nieuw bericht</div>
-              <button className="btn-icon drawer-close" onClick={() => setNewOpen(false)} aria-label="Sluiten">✕</button>
+              <button className="btn-icon drawer-close" onClick={() => setNewOpen(false)} aria-label="Sluiten"><span className="btn-icon-svg">{Icons.xMark}</span></button>
             </div>
             <div className="drawer-body">
               <BerichtForm onSave={handleAdd} onCancel={() => setNewOpen(false)} saveLabel="Bericht toevoegen" />
