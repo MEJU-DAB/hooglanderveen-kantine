@@ -382,13 +382,15 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
               </div>
               <div className="slides-viewport">
                 <div className={`slide-body active${image ? ' has-image' : ''}`}>
-                  <AutoFitSlide
-                    title={title || '(geen titel)'}
-                    content={content}
-                    image={image}
-                    fontSizeOverride={fontSizeOverride}
-                    titleSizeOverride={titleSizeOverride}
-                  />
+                  <div className="slide-text-outer">
+                    <AutoFitSlide
+                      title={title || '(geen titel)'}
+                      content={content}
+                      image={image}
+                      fontSizeOverride={fontSizeOverride}
+                      titleSizeOverride={titleSizeOverride}
+                    />
+                  </div>
                   {image && (
                     <div className="slide-img-wrap">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
