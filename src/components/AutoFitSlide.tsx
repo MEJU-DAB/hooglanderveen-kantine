@@ -51,10 +51,17 @@ export function AutoFitSlide({ title, content, image, fontSizeOverride = 0 }: Au
     if (bodyEl) {
       const titleH    = titleEl.getBoundingClientRect().height;
       const gapH      = gapEl ? gapEl.getBoundingClientRect().height : 18;
-      const remaining = avail - titleH - gapH - 4;
+      const remaining = avail - titleH - gapH - 16; // extra buffer voor padding/borders
 
       if (fontSizeOverride > 0) {
-        bodyEl.style.fontSize = `${fontSizeOverride}rem`;
+        // Override: binary search om te garanderen dat het past
+        let blo = 0.5, bhi = fontSizeOverride;
+        for (let i = 0; i < 12; i++) {
+          const mid = (blo + bhi) / 2;
+          bodyEl.style.fontSize = `${mid}rem`;
+          if (bodyEl.scrollHeight <= remaining) blo = mid; else bhi = mid;
+        }
+        bodyEl.style.fontSize = `${blo}rem`;
       } else {
         let blo = MIN_BODY, bhi = MAX_BODY;
         for (let i = 0; i < 14; i++) {

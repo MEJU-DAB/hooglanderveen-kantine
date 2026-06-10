@@ -194,6 +194,7 @@ body {
   padding: 0 4rem 0 4.5rem;
   flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -233,6 +234,8 @@ body {
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* Categorie-badge boven de slide */
@@ -311,9 +314,9 @@ body {
   line-height: 1.7;
   color: var(--ink);
   white-space: normal;
-  max-width: 76ch;
   font-weight: 400;
   overflow: hidden;
+  min-height: 0;
   border-left: 4px solid #ffd700;
   padding-left: 1.4rem;
 }
