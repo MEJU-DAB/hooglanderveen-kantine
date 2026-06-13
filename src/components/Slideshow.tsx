@@ -72,8 +72,9 @@ function Ticker({ items }: { items: string[] }) {
 }
 
 function ClockWidget() {
-  const [time, setTime] = useState(fmtTime);
+  const [time, setTime] = useState('');
   useEffect(() => {
+    setTime(fmtTime());
     const id = setInterval(() => setTime(fmtTime()), 1000);
     return () => clearInterval(id);
   }, []);
