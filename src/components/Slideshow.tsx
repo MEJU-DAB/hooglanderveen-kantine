@@ -94,14 +94,29 @@ export default function Slideshow() {
   const fetchBerichten = useCallback(async () => {
     try {
       const res = await fetch('/api/berichten', { cache: 'no-store' });
-      setBerichten(await res.json());
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setBerichten(data);
     } catch {}
   }, []);
 
   useEffect(() => {
-    fetchBerichten();
+    let retryId: ReturnType<typeof setTimeout> | null = null;
+
+    const initial = async () => {
+      await fetchBerichten();
+      // Als na de eerste fetch nog steeds geen berichten, snel opnieuw proberen
+      if (activeRef.current.length === 0) {
+        retryId = setTimeout(fetchBerichten, 3000);
+      }
+    };
+
+    initial();
     const id = setInterval(fetchBerichten, 30000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (retryId) clearTimeout(retryId);
+    };
   }, [fetchBerichten]);
 
   const getMs = useCallback(() => {
