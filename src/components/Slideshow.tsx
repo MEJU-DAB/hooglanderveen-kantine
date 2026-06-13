@@ -141,8 +141,26 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
         schedule(getMs());
       }, delay);
     };
+
+    const restart = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      schedule(getMs());
+    };
+
     schedule(getMs());
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+
+    // Embedded browsers/WebViews (bijv. Sportlink mediaplayer) throttlen
+    // setTimeout als de pagina niet als 'actief' wordt gezien. We hervatten
+    // de timer zodra de pagina weer zichtbaar of gefocust is.
+    const onVisible = () => { if (!document.hidden) restart(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', restart);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', restart);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.length]);
 
@@ -150,9 +168,21 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
     if (current >= active.length && active.length > 0) setCurrent(0);
   }, [active.length, current]);
 
-  const dateStr = new Date().toLocaleDateString('nl-NL', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
+  // Datum client-side bepalen om hydration mismatch te voorkomen
+  // (Vercel server draait UTC, browser draait Europe/Amsterdam — andere datum na 23:00).
+  const [dateStr, setDateStr] = useState('');
+  useEffect(() => {
+    const fmt = () => new Date().toLocaleDateString('nl-NL', {
+      weekday: 'long', day: 'numeric', month: 'long',
+    });
+    setDateStr(fmt());
+    // Datum bijwerken na middernacht
+    const now = new Date();
+    const msUntilMidnight =
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    const id = setTimeout(() => setDateStr(fmt()), msUntilMidnight);
+    return () => clearTimeout(id);
+  }, []);
 
   const idx = active.length > 0 ? current % active.length : 0;
 
