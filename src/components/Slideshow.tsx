@@ -80,8 +80,8 @@ function ClockWidget() {
   return <span className="slide-time">{time}</span>;
 }
 
-export default function Slideshow() {
-  const [berichten, setBerichten] = useState<Bericht[]>([]);
+export default function Slideshow({ initialBerichten = [] }: { initialBerichten?: Bericht[] }) {
+  const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
   const [current, setCurrent] = useState(0);
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentRef = useRef(0);
