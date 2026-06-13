@@ -16,14 +16,8 @@ interface SlideItem extends Bericht {
   _pages: number;
 }
 
-/**
- * Splits alleen als content echt heel lang is — de auto-fit regelt de rest.
- * Splitst op alinea-grenzen, max 3 pagina's.
- */
 function splitBericht(b: Bericht): SlideItem[] {
   if (!b.content) return [{ ...b, _page: 1, _pages: 1 }];
-  // Standaard: alles op 1 pagina. Auto-fit schaalt tekst naar beschikbare ruimte.
-  // Alleen bij écht enorme teksten (> ~1000 woorden) splitsen.
   const maxPerPage = b.image ? 3500 : 6000;
   const chunks = splitContent(b.content, maxPerPage);
   if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1 }];
@@ -32,13 +26,66 @@ function splitBericht(b: Bericht): SlideItem[] {
   }));
 }
 
-
 /**
- * Ticker — genereert genoeg kopieën om het scherm te vullen zodat er
- * geen zichtbare herhaling is zolang de vorige serie nog in beeld is.
+ * Genereert @keyframes CSS die bepaalt wanneer elke slide zichtbaar is.
+ * Alle slides gebruiken dezelfde animatieduur (som van alle durations).
+ * De timing is gecodeerd in de keyframe-percentages per slide — er is
+ * geen JS-timer nodig. De compositor thread doet het werk.
  */
+function buildKeyframes(slides: SlideItem[]): string {
+  if (slides.length === 0) return '';
+  if (slides.length === 1) {
+    return '@keyframes slide-anim-0{0%,100%{opacity:1;transform:translateY(0)}}\n';
+  }
+
+  const totalS = slides.reduce((sum, s) => sum + (s.duration ?? 10), 0);
+  const fadePct = (0.55 / totalS) * 100; // 0.55s fade uitgedrukt als % van totale cyclus
+
+  const h = 'opacity:0;transform:translateY(14px)';
+  const v = 'opacity:1;transform:translateY(0)';
+
+  let css = '';
+  let cumulative = 0;
+
+  for (let i = 0; i < slides.length; i++) {
+    const dur = slides[i].duration ?? 10;
+    const startPct = (cumulative / totalS) * 100;
+    const endPct   = ((cumulative + dur) / totalS) * 100;
+    const mid      = (startPct + endPct) / 2;
+
+    // Fade-in eindigt op midpoint of na fadePct — wat het eerst komt
+    const fadeInEnd    = Math.min(startPct + fadePct, mid);
+    // Fade-out begint op midpoint of voor fadePct — wat het laatste komt
+    const fadeOutStart = Math.max(endPct - fadePct, mid);
+
+    css += `@keyframes slide-anim-${i}{`;
+
+    if (i === 0) {
+      // Eerste slide start direct zichtbaar (naadloze herstart na einde cyclus)
+      css += `0%{${v}}`;
+    } else {
+      css += `0%{${h}}`;
+      if (startPct > 0.001) css += `${startPct.toFixed(3)}%{${h}}`;
+      css += `${fadeInEnd.toFixed(3)}%{${v}}`;
+    }
+
+    if (fadeOutStart > fadeInEnd + 0.01) {
+      css += `${fadeOutStart.toFixed(3)}%{${v}}`;
+    }
+
+    // Verberg op het einde van het tijdvenster (ook laatste slide, zodat slide 0 naadloos overneemt)
+    const endToken = endPct < 99.999 ? `${endPct.toFixed(3)}%` : '100%';
+    css += `${endToken}{${h}}`;
+    if (endPct < 99.999) css += `100%{${h}}`;
+
+    css += `}\n`;
+    cumulative += dur;
+  }
+
+  return css;
+}
+
 function Ticker({ items }: { items: string[] }) {
-  // Minder dan 6 items → stilstaand welkomstbericht
   if (items.length < 6) {
     return (
       <div className="slide-footer slide-footer-static">
@@ -83,13 +130,10 @@ function ClockWidget() {
 
 export default function Slideshow({ initialBerichten = [] }: { initialBerichten?: Bericht[] }) {
   const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
-  const [current, setCurrent] = useState(0);
-  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentRef = useRef(0);
-  const activeRef  = useRef<SlideItem[]>([]); // altijd actueel, ook in timer-closure
+  const activeRef = useRef<SlideItem[]>([]);
 
   const active: SlideItem[] = berichten.filter(b => b.active).flatMap(splitBericht);
-  activeRef.current = active; // sync elke render
+  activeRef.current = active;
   const tickerItems = active.filter(b => b.ticker && b._page === 1).map(b => b.title);
 
   const fetchBerichten = useCallback(async () => {
@@ -103,15 +147,12 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
 
   useEffect(() => {
     let retryId: ReturnType<typeof setTimeout> | null = null;
-
     const initial = async () => {
       await fetchBerichten();
-      // Als na de eerste fetch nog steeds geen berichten, snel opnieuw proberen
       if (activeRef.current.length === 0) {
         retryId = setTimeout(fetchBerichten, 3000);
       }
     };
-
     initial();
     const id = setInterval(fetchBerichten, 30000);
     return () => {
@@ -120,71 +161,39 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
     };
   }, [fetchBerichten]);
 
-  const getMs = useCallback(() => {
-    const slides = activeRef.current;
-    return slides.length > 0
-      ? (slides[currentRef.current % slides.length]?.duration ?? 10) * 1000
-      : 10000;
-  }, []);
-
+  // Injecteer @keyframes in <head> zodra de actieve slideset verandert.
+  // De CSS-animatie draait volledig op de compositor thread — onafhankelijk
+  // van de JS event loop. Embedded browsers (bijv. Sportlink mediaplayer)
+  // die setTimeout throttlen wisselen hierdoor toch gewoon door.
+  const activeKey = active.map(s => `${s.id}:${s.duration}`).join(',');
   useEffect(() => {
     if (active.length === 0) return;
-    currentRef.current = 0;
-
-    const schedule = (delay: number) => {
-      timerRef.current = setTimeout(() => {
-        const slides = activeRef.current;
-        if (slides.length === 0) return;
-        const next = (currentRef.current + 1) % slides.length;
-        currentRef.current = next;
-        setCurrent(next);
-        schedule(getMs());
-      }, delay);
-    };
-
-    const restart = () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      schedule(getMs());
-    };
-
-    schedule(getMs());
-
-    // Embedded browsers/WebViews (bijv. Sportlink mediaplayer) throttlen
-    // setTimeout als de pagina niet als 'actief' wordt gezien. We hervatten
-    // de timer zodra de pagina weer zichtbaar of gefocust is.
-    const onVisible = () => { if (!document.hidden) restart(); };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', restart);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', restart);
-    };
+    const css = buildKeyframes(active);
+    document.getElementById('slideshow-keyframes')?.remove();
+    const el = document.createElement('style');
+    el.id = 'slideshow-keyframes';
+    el.textContent = css;
+    document.head.appendChild(el);
+    return () => { document.getElementById('slideshow-keyframes')?.remove(); };
+  // activeKey is een stabiele string-afleiding van active — veilig als dep
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active.length]);
+  }, [activeKey]);
 
-  useEffect(() => {
-    if (current >= active.length && active.length > 0) setCurrent(0);
-  }, [active.length, current]);
+  const totalS = active.reduce((sum, s) => sum + (s.duration ?? 10), 0);
 
-  // Datum client-side bepalen om hydration mismatch te voorkomen
-  // (Vercel server draait UTC, browser draait Europe/Amsterdam — andere datum na 23:00).
+  // Datum client-side — Vercel draait UTC, browser draait Europe/Amsterdam
   const [dateStr, setDateStr] = useState('');
   useEffect(() => {
     const fmt = () => new Date().toLocaleDateString('nl-NL', {
       weekday: 'long', day: 'numeric', month: 'long',
     });
     setDateStr(fmt());
-    // Datum bijwerken na middernacht
     const now = new Date();
     const msUntilMidnight =
       new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
     const id = setTimeout(() => setDateStr(fmt()), msUntilMidnight);
     return () => clearTimeout(id);
   }, []);
-
-  const idx = active.length > 0 ? current % active.length : 0;
 
   return (
     <div className="slideshow-root">
@@ -207,7 +216,7 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
         </div>
       </div>
 
-      {/* Wisselende slide-inhoud */}
+      {/* Wisselende slide-inhoud — animatie volledig via CSS @keyframes */}
       <div className="slides-viewport">
         {active.length === 0 ? (
           <div className="slide-body active">
@@ -222,9 +231,15 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
           active.map((b, i) => (
             <div
               key={b.id}
-              className={`slide-body${b.image ? ' has-image' : ''}${i === idx ? ' active' : ''}`}
+              className={`slide-body${b.image ? ' has-image' : ''}`}
+              style={{
+                animationName: `slide-anim-${i}`,
+                animationDuration: `${totalS}s`,
+                animationTimingFunction: 'linear',
+                animationIterationCount: 'infinite',
+                animationFillMode: 'both',
+              }}
             >
-              {/* Pagina-indicator voor gesplitste artikelen */}
               {b._pages > 1 && (
                 <div className="slide-cat-bar">
                   <span className="slide-page-indicator">
