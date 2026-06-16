@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
           'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
         )
       : await db.execute(
-          'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id DESC'
+          'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'
         );
 
     return NextResponse.json(result.rows.map(r => toRow(r as Record<string, unknown>)));
