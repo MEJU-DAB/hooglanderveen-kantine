@@ -38,7 +38,7 @@ function buildKeyframes(slides: SlideItem[]): string {
     return '@keyframes slide-anim-0{0%,100%{opacity:1;transform:translateY(0)}}\n';
   }
 
-  const totalS = slides.reduce((sum, s) => sum + (s.duration ?? 10), 0);
+  const totalS = Math.max(1, slides.reduce((sum, s) => sum + (s.duration ?? 10), 0));
   const fadePct = (0.55 / totalS) * 100; // 0.55s fade uitgedrukt als % van totale cyclus
 
   const h = 'opacity:0;transform:translateY(14px)';
@@ -179,7 +179,7 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey]);
 
-  const totalS = active.reduce((sum, s) => sum + (s.duration ?? 10), 0);
+  const totalS = Math.max(1, active.reduce((sum, s) => sum + (s.duration ?? 10), 0));
 
   // Datum client-side — Vercel draait UTC, browser draait Europe/Amsterdam
   const [dateStr, setDateStr] = useState('');

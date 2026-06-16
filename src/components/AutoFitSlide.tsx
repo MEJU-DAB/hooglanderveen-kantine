@@ -84,9 +84,11 @@ export function AutoFitSlide({ title, content, image, fontSizeOverride = 0, titl
 
     // Opnieuw meten zodra webfonts geladen zijn (fallback-fonts hebben
     // andere metrics waardoor de eerste meting verkeerd kan zijn).
+    let cancelled = false;
     if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(run);
+      document.fonts.ready.then(() => { if (!cancelled) run(); });
     }
+    return () => { cancelled = true; };
   }, [title, content, image, fontSizeOverride, titleSizeOverride, MAX_TITLE, MAX_BODY]);
 
   return (

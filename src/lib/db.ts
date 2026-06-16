@@ -8,7 +8,10 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
+let initialized = false;
+
 export async function initDb() {
+  if (initialized) return;
   await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS berichten (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +44,7 @@ export async function initDb() {
       bericht_id INTEGER
     );
   `);
+  initialized = true;
 }
 
 export default db;

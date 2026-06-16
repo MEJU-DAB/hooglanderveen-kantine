@@ -1880,3 +1880,103 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
 .preview-open-btn {
   font-size: 0.82rem !important;
 }
+
+/* ── Uitlogknop sidebar ── */
+.dash-logout-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s, border-color 0.15s;
+}
+.dash-logout-btn:hover { color: var(--red); border-color: var(--red); }
+
+/* ── Login pagina ── */
+.login-root {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 30% 40%, rgba(21,96,184,0.18) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 80%, rgba(255,214,0,0.08) 0%, transparent 50%),
+              var(--surface);
+}
+.login-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px 40px;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+}
+.login-logo { margin-bottom: 8px; }
+.login-title {
+  font-family: 'Bebas Neue', 'Oswald', sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.login-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.login-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--blue);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.login-input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.login-input:focus { border-color: var(--blue); }
+.login-error {
+  font-size: 0.82rem;
+  color: var(--red);
+  padding: 2px 0;
+}
+.login-btn {
+  margin-top: 4px;
+  padding: 12px;
+  background: var(--yellow);
+  color: #111;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  letter-spacing: 0.04em;
+}
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }

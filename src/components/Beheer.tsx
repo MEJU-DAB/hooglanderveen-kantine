@@ -179,6 +179,11 @@ function Toast({ msg, err, show }: { msg: string; err: boolean; show: boolean })
 function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const handleFile = (file: File) => {
+    // ~500KB origineel → ~700KB base64; weiger grotere bestanden vroegtijdig
+    if (file.size > 500_000) {
+      alert(`Afbeelding te groot (${Math.round(file.size / 1024)}KB). Maximum is 500KB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = e => onChange(e.target?.result as string);
     reader.readAsDataURL(file);
@@ -669,8 +674,12 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
   };
 
   const fetchItems = useCallback(async () => {
-    const res = await fetch('/api/rss');
-    setItems(await res.json());
+    try {
+      const res = await fetch('/api/rss');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setItems(data);
+    } catch {}
   }, []);
 
   const triggerFetch = useCallback(async (silent = false) => {
@@ -686,7 +695,10 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
   useEffect(() => {
     triggerFetch(); // eerste fetch bij openen tab
     const id = setInterval(() => triggerFetch(true), 5 * 60 * 1000); // elke 5 min
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (toastRef.current) clearTimeout(toastRef.current);
+    };
   }, [triggerFetch]);
 
   const handleReject = async (item: RssItem) => {
@@ -836,13 +848,18 @@ export default function Beheer() {
   };
 
   const fetchBerichten = useCallback(async () => {
-    const res = await fetch('/api/berichten');
-    setBerichten(await res.json());
+    try {
+      const res = await fetch('/api/berichten');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setBerichten(data);
+    } catch {}
   }, []);
 
   const fetchRssBadge = useCallback(async () => {
     try {
       const res = await fetch('/api/rss');
+      if (!res.ok) return;
       const items = await res.json();
       setRssPending(Array.isArray(items) ? items.length : 0);
     } catch {}
@@ -852,7 +869,10 @@ export default function Beheer() {
     fetchBerichten();
     fetchRssBadge();
     const id = setInterval(fetchRssBadge, 60_000); // badge elke minuut updaten
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, [fetchBerichten, fetchRssBadge]);
 
   const handleAdd = async (form: FormState) => {
@@ -968,6 +988,16 @@ export default function Beheer() {
             <span>Nieuwsscherm</span>
             <span className="dash-screen-link-arrow">{Icons.externalLink}</span>
           </Link>
+          <button
+            className="dash-logout-btn"
+            onClick={async () => {
+              await fetch('/api/auth', { method: 'DELETE' });
+              window.location.href = '/beheer/login';
+            }}
+            title="Uitloggen"
+          >
+            Uitloggen
+          </button>
         </div>
       </aside>
 
