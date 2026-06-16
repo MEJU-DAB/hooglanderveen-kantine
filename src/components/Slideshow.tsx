@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht } from '@/lib/types';
@@ -86,7 +86,7 @@ function buildKeyframes(slides: SlideItem[]): string {
 }
 
 function Ticker({ items }: { items: string[] }) {
-  if (items.length < 6) {
+  if (items.length === 0) {
     return (
       <div className="slide-footer slide-footer-static">
         <div className="ticker-label"><span>Nieuws</span></div>
@@ -100,12 +100,30 @@ function Ticker({ items }: { items: string[] }) {
   const copies = Math.max(2, Math.ceil(3840 / singlePx));
   const filled = Array.from({ length: copies }, () => items).flat();
   const doubled = [...filled, ...filled];
-  const duration = Math.max(90, Math.min(300, filled.length * 22));
+  const duration = Math.max(40, Math.min(300, filled.length * 12));
   return (
     <div className="slide-footer">
       <div className="ticker-label"><span>Nieuws</span></div>
       <div className="ticker-scroll-area">
-        <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
+        {/*
+          Alle animation-* properties staan inline zodat de CSS-shorthand
+          in globals.css (.ticker-track { animation: ticker-scroll 30s ... })
+          geen conflict oplevert in embedded browsers (Sportlink WebView).
+          Inline styles winnen altijd van stylesheet-regels.
+        */}
+        <div
+          className="ticker-track"
+          style={{
+            animationName: 'ticker-scroll',
+            animationDuration: `${duration}s`,
+            animationTimingFunction: 'linear',
+            animationIterationCount: 'infinite',
+            animationDelay: '0s',
+            animationFillMode: 'none',
+            animationDirection: 'normal',
+            animationPlayState: 'running',
+          }}
+        >
           {doubled.map((title, i) => (
             <span key={i} className="ticker-item">
               <span className="ticker-dot" />
@@ -128,20 +146,42 @@ function ClockWidget() {
   return <span className="slide-time">{time}</span>;
 }
 
+// Lichte fingerprint: alleen velden die de slideshow/ticker beïnvloeden
+function fingerprint(bs: Bericht[]): string {
+  return bs.map(b =>
+    `${b.id}:${b.active ? 1 : 0}:${b.ticker ? 1 : 0}:${b.duration}:${b.sort_order}:${b.title.slice(0, 40)}`,
+  ).join('|');
+}
+
 export default function Slideshow({ initialBerichten = [] }: { initialBerichten?: Bericht[] }) {
   const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
+  const berichtenFpRef = useRef(fingerprint(initialBerichten));
   const activeRef = useRef<SlideItem[]>([]);
 
-  const active: SlideItem[] = berichten.filter(b => b.active).flatMap(splitBericht);
+  const active: SlideItem[] = useMemo(
+    () => berichten.filter(b => b.active).flatMap(splitBericht),
+    [berichten],
+  );
   activeRef.current = active;
-  const tickerItems = active.filter(b => b.ticker && b._page === 1).map(b => b.title);
+  const tickerItems = useMemo(
+    () => active.filter(b => b.ticker && b._page === 1).map(b => b.title),
+    [active],
+  );
 
   const fetchBerichten = useCallback(async () => {
     try {
       const res = await fetch('/api/berichten', { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
-      if (Array.isArray(data)) setBerichten(data);
+      if (!Array.isArray(data)) return;
+      // Alleen re-renderen als data daadwerkelijk veranderd is.
+      // Dit voorkomt dat 30s-polls onnodige re-renders veroorzaken die
+      // useMemo-berekeningen en keyframe-checks triggeren.
+      const fp = fingerprint(data);
+      if (fp !== berichtenFpRef.current) {
+        berichtenFpRef.current = fp;
+        setBerichten(data);
+      }
     } catch {}
   }, []);
 
@@ -162,22 +202,36 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
   }, [fetchBerichten]);
 
   // Injecteer @keyframes in <head> zodra de actieve slideset verandert.
-  // De CSS-animatie draait volledig op de compositor thread — onafhankelijk
-  // van de JS event loop. Embedded browsers (bijv. Sportlink mediaplayer)
-  // die setTimeout throttlen wisselen hierdoor toch gewoon door.
+  // Regels:
+  //  1. Alleen updaten als de gegenereerde CSS écht verschilt van wat er al staat.
+  //  2. De bestaande <style>-tag NOOIT verwijderen — updaat textContent in-place.
+  //     Verwijdering invalideert de CSSOM, waardoor de browser alle lopende
+  //     CSS-animaties (incl. de ticker) even reset → zichtbare flikkering.
+  //  3. Cleanup (unmount) zit in een aparte effect met lege deps zodat hij
+  //     nooit per ongeluk vóór een re-injectie draait.
   const activeKey = active.map(s => `${s.id}:${s.duration}`).join(',');
+  const lastCssRef = useRef('');
+
   useEffect(() => {
     if (active.length === 0) return;
     const css = buildKeyframes(active);
-    document.getElementById('slideshow-keyframes')?.remove();
-    const el = document.createElement('style');
-    el.id = 'slideshow-keyframes';
-    el.textContent = css;
-    document.head.appendChild(el);
-    return () => { document.getElementById('slideshow-keyframes')?.remove(); };
-  // activeKey is een stabiele string-afleiding van active — veilig als dep
+    if (css === lastCssRef.current) return; // identiek — niets doen
+    lastCssRef.current = css;
+
+    let el = document.getElementById('slideshow-keyframes') as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'slideshow-keyframes';
+      document.head.appendChild(el);
+    }
+    el.textContent = css; // in-place update — geen CSSOM-invalideringsflits
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey]);
+
+  // Cleanup alleen bij unmount — NIET bij elke activeKey-wijziging
+  useEffect(() => {
+    return () => { document.getElementById('slideshow-keyframes')?.remove(); };
+  }, []);
 
   const totalS = Math.max(1, active.reduce((sum, s) => sum + (s.duration ?? 10), 0));
 
