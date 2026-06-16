@@ -14,7 +14,7 @@ import { Bericht } from '@/lib/types';
 import { splitContent, stripTags } from '@/lib/splitContent';
 import { AutoFitSlide } from '@/components/AutoFitSlide';
 
-/* ── SVG Icons (Heroicons outline stijl) ── */
+/* ── SVG Icons ── */
 const Icons = {
   document: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -135,12 +135,61 @@ const Icons = {
       <path d="M21 12a9 9 0 01-9 9"/>
     </svg>
   ),
+  archive: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8"/>
+      <rect x="1" y="3" width="22" height="5"/>
+      <line x1="10" y1="12" x2="14" y2="12"/>
+    </svg>
+  ),
+  restore: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+    </svg>
+  ),
+  calendar: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  ),
 };
 
 /* ── helpers ── */
 function fmtDate(s: string) {
   try { return new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }); }
   catch { return s; }
+}
+
+function fmtExpiry(s: string) {
+  try {
+    const d = new Date(s.replace(' ', 'T'));
+    return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) + ' ' +
+      d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  } catch { return s; }
+}
+
+/** Converteert DB-datetime ("2024-06-17 14:30:00") naar datetime-local waarde ("2024-06-17T14:30") */
+function toDatetimeLocal(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(' ', 'T').slice(0, 16);
+}
+
+/* ── ExpiryBadge ── */
+function ExpiryBadge({ expires_at }: { expires_at?: string | null }) {
+  if (!expires_at) return null;
+  const d = new Date(expires_at.replace(' ', 'T'));
+  const now = new Date();
+  const diff = d.getTime() - now.getTime();
+  if (diff <= 0) return null; // al gearchiveerd door API
+  const soon = diff < 48 * 60 * 60 * 1000;
+  return (
+    <span className={`expiry-badge${soon ? ' expiry-soon' : ''}`}>
+      Vervalt {fmtExpiry(expires_at)}
+    </span>
+  );
 }
 
 /* ── RSS inbox types ── */
@@ -157,7 +206,7 @@ interface RssItem {
 }
 
 /* ── types ── */
-const DEFAULT_DURATION = 10; // seconden
+const DEFAULT_DURATION = 10;
 
 interface FormState {
   title: string;
@@ -165,48 +214,147 @@ interface FormState {
   image: string | null;
   ticker: boolean;
   duration: number;
-  font_size: number;   // rem override bodytekst, 0 = auto
-  title_size: number;  // rem override titelgrootte, 0 = auto
+  font_size: number;
+  title_size: number;
+  expires_at: string | null;
 }
-const emptyForm = (): FormState => ({ title: '', content: '', image: null, ticker: true, duration: DEFAULT_DURATION, font_size: 0, title_size: 0 });
+const emptyForm = (): FormState => ({
+  title: '', content: '', image: null, ticker: true,
+  duration: DEFAULT_DURATION, font_size: 0, title_size: 0, expires_at: null,
+});
 
 /* ── Toast ── */
 function Toast({ msg, err, show }: { msg: string; err: boolean; show: boolean }) {
   return <div className={`toast${show ? ' show' : ''}${err ? ' err' : ''}`}>{msg}</div>;
 }
 
+/* ── Afbeeldingscompressie via Canvas API ── */
+async function compressImage(
+  file: File
+): Promise<{ dataUrl: string; originalKb: number; compressedKb: number }> {
+  const originalKb = Math.round(file.size / 1024);
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX = 1920;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width >= height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas niet beschikbaar')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL('image/jpeg', 0.82);
+      // base64-lengte → bytes: elke 4 base64-chars ≈ 3 bytes
+      const b64 = compressed.split(',')[1] ?? '';
+      const compressedBytes = Math.round(b64.length * 3 / 4);
+      const compressedKb = Math.round(compressedBytes / 1024);
+
+      if (compressedBytes >= file.size) {
+        // Gecomprimeerde versie is groter (bijv. kleine PNG) — gebruik origineel
+        const reader = new FileReader();
+        reader.onload = e => resolve({ dataUrl: e.target!.result as string, originalKb, compressedKb: originalKb });
+        reader.onerror = () => reject(new Error('Leesfout'));
+        reader.readAsDataURL(file);
+      } else {
+        resolve({ dataUrl: compressed, originalKb, compressedKb });
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Kon afbeelding niet laden')); };
+    img.src = objectUrl;
+  });
+}
+
 /* ── ImageUpload ── */
 function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const handleFile = (file: File) => {
-    // ~500KB origineel → ~700KB base64; weiger grotere bestanden vroegtijdig
-    if (file.size > 500_000) {
-      alert(`Afbeelding te groot (${Math.round(file.size / 1024)}KB). Maximum is 500KB.`);
+  const [compressing, setCompressing] = useState(false);
+  const [sizeInfo, setSizeInfo] = useState<{ originalKb: number; compressedKb: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    setError(null);
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!ALLOWED.includes(file.type)) {
+      setError(`Ongeldig formaat (${file.type || 'onbekend'}). Gebruik JPEG, PNG of WebP.`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = e => onChange(e.target?.result as string);
-    reader.readAsDataURL(file);
+    setCompressing(true);
+    try {
+      const { dataUrl, originalKb, compressedKb } = await compressImage(file);
+      // Controleer de uiteindelijke grootte (max 2 MB)
+      const b64 = dataUrl.split(',')[1] ?? '';
+      const bytes = Math.round(b64.length * 3 / 4);
+      if (bytes > 2_000_000) {
+        setError(`Afbeelding te groot na compressie (${Math.round(bytes / 1024)} KB). Gebruik een kleinere afbeelding.`);
+        return;
+      }
+      setSizeInfo({ originalKb, compressedKb });
+      onChange(dataUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kon afbeelding niet verwerken');
+    } finally {
+      setCompressing(false);
+    }
   };
+
+  const fmtKb = (kb: number) => kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+
   return (
     <div>
+      {error && <div className="img-error">{error}</div>}
       {value ? (
-        <div className="img-preview-wrap">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt="preview" />
-          <button className="img-remove" onClick={() => onChange(null)} type="button" aria-label="Afbeelding verwijderen">
-            <span className="btn-icon-svg">{Icons.xMark}</span>
-          </button>
+        <div>
+          <div className="img-preview-wrap">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="preview" />
+            <button
+              className="img-remove"
+              onClick={() => { onChange(null); setSizeInfo(null); setError(null); }}
+              type="button"
+              aria-label="Afbeelding verwijderen"
+            >
+              <span className="btn-icon-svg">{Icons.xMark}</span>
+            </button>
+          </div>
+          {sizeInfo && sizeInfo.compressedKb < sizeInfo.originalKb && (
+            <div className="img-size-info">
+              Gecomprimeerd: {fmtKb(sizeInfo.originalKb)} → {fmtKb(sizeInfo.compressedKb)}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="img-upload-area"
+        <div
+          className={`img-upload-area${compressing ? ' compressing' : ''}`}
           onDragOver={e => e.preventDefault()}
           onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-          onClick={() => inputRef.current?.click()}>
-          <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          <div className="img-upload-icon">{Icons.camera}</div>
-          <p><strong>Klik</strong> of sleep een afbeelding</p>
+          onClick={() => !compressing && inputRef.current?.click()}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+          />
+          {compressing ? (
+            <>
+              <div className="img-upload-icon">{Icons.spinner}</div>
+              <p>Comprimeren…</p>
+            </>
+          ) : (
+            <>
+              <div className="img-upload-icon">{Icons.camera}</div>
+              <p><strong>Klik</strong> of sleep een afbeelding</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>JPEG · PNG · WebP · max 2 MB na compressie</p>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -244,22 +392,17 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
   return (
     <div className="tip-toolbar">
-      {/* Undo / Redo */}
       <div className="tip-group">
         {btn(!editor.can().undo(), () => editor.chain().focus().undo().run(), '↩', 'Ongedaan maken')}
         {btn(!editor.can().redo(), () => editor.chain().focus().redo().run(), '↪', 'Opnieuw')}
       </div>
       <span className="tip-sep" />
-
-      {/* Headings */}
       <div className="tip-group">
         {btn(editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run(), 'H1', 'Kop 1')}
         {btn(editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), 'H2', 'Kop 2')}
         {btn(editor.isActive('heading', { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), 'H3', 'Kop 3')}
       </div>
       <span className="tip-sep" />
-
-      {/* Inline opmaak */}
       <div className="tip-group">
         {btn(editor.isActive('bold'),      () => editor.chain().focus().toggleBold().run(),      <strong>V</strong>, 'Vet')}
         {btn(editor.isActive('italic'),    () => editor.chain().focus().toggleItalic().run(),    <em>S</em>,         'Cursief')}
@@ -268,31 +411,23 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
         {btn(editor.isActive('code'),      () => editor.chain().focus().toggleCode().run(),      <code style={{fontFamily:'monospace'}}>{'<>'}</code>, 'Code')}
       </div>
       <span className="tip-sep" />
-
-      {/* Uitlijning */}
       <div className="tip-group">
-        {btn(editor.isActive({ textAlign: 'left' }),    () => editor.chain().focus().setTextAlign('left').run(),    '⬅', 'Links')}
-        {btn(editor.isActive({ textAlign: 'center' }),  () => editor.chain().focus().setTextAlign('center').run(),  '↔', 'Centreren')}
-        {btn(editor.isActive({ textAlign: 'right' }),   () => editor.chain().focus().setTextAlign('right').run(),   '➡', 'Rechts')}
+        {btn(editor.isActive({ textAlign: 'left' }),   () => editor.chain().focus().setTextAlign('left').run(),   '⬅', 'Links')}
+        {btn(editor.isActive({ textAlign: 'center' }), () => editor.chain().focus().setTextAlign('center').run(), '↔', 'Centreren')}
+        {btn(editor.isActive({ textAlign: 'right' }),  () => editor.chain().focus().setTextAlign('right').run(),  '➡', 'Rechts')}
       </div>
       <span className="tip-sep" />
-
-      {/* Lijsten */}
       <div className="tip-group">
         {btn(editor.isActive('bulletList'),  () => editor.chain().focus().toggleBulletList().run(),  '• Lijst',  'Opsomming')}
         {btn(editor.isActive('orderedList'), () => editor.chain().focus().toggleOrderedList().run(), '1. Lijst', 'Genummerd')}
       </div>
       <span className="tip-sep" />
-
-      {/* Blokken */}
       <div className="tip-group">
         {btn(editor.isActive('blockquote'), () => editor.chain().focus().toggleBlockquote().run(), '❝', 'Citaat')}
         {btn(false, () => editor.chain().focus().setHorizontalRule().run(), '─', 'Lijn')}
-        {btn(editor.isActive('link'),       setLink, <span className="btn-icon-svg" style={{width:14,height:14}}>{Icons.link}</span>, 'Link invoegen')}
+        {btn(editor.isActive('link'), setLink, <span className="btn-icon-svg" style={{width:14,height:14}}>{Icons.link}</span>, 'Link invoegen')}
       </div>
       <span className="tip-sep" />
-
-      {/* Clear */}
       <div className="tip-group">
         {btn(false, () => editor.chain().focus().clearNodes().unsetAllMarks().run(), 'Opmaak wissen', 'Opmaak verwijderen', true)}
       </div>
@@ -300,7 +435,7 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 }
 
-/* ── RichEditor (Tiptap wrapper) ── */
+/* ── RichEditor ── */
 function RichEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const editor = useEditor({
     extensions: [
@@ -313,9 +448,7 @@ function RichEditor({ value, onChange }: { value: string; onChange: (v: string) 
     ],
     content: value || '',
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
-    editorProps: {
-      attributes: { class: 'tip-editor-content' },
-    },
+    editorProps: { attributes: { class: 'tip-editor-content' } },
   });
 
   const chars = editor?.storage.characterCount.characters() ?? 0;
@@ -338,15 +471,11 @@ function PaginaPreview({ content, hasImage }: { content: string; hasImage: boole
   const maxPerPage = hasImage ? 600 : 1200;
   const pages = splitContent(content, maxPerPage);
   const textLen = stripTags(content).length;
-
   if (!content || textLen === 0) return null;
-
   return (
     <div className="pagina-preview">
       <div className="pagina-preview-header">
-        <span className="pagina-preview-title">
-          Paginaindeling op nieuwsscherm
-        </span>
+        <span className="pagina-preview-title">Paginaindeling op nieuwsscherm</span>
         <span className={`pagina-count-badge ${pages.length > 1 ? 'multi' : 'single'}`}>
           {pages.length === 1 ? '✓ 1 pagina' : `${pages.length} pagina's`}
         </span>
@@ -355,8 +484,7 @@ function PaginaPreview({ content, hasImage }: { content: string; hasImage: boole
         {pages.map((chunk, i) => (
           <div key={i} className="pagina-item">
             <div className="pagina-item-label">Pagina {i + 1}</div>
-            <div className="pagina-item-text"
-              dangerouslySetInnerHTML={{ __html: chunk }} />
+            <div className="pagina-item-text" dangerouslySetInnerHTML={{ __html: chunk }} />
           </div>
         ))}
       </div>
@@ -365,22 +493,13 @@ function PaginaPreview({ content, hasImage }: { content: string; hasImage: boole
 }
 
 /* ── SlidePreviewModal ── */
-// De preview rendert de slide op echte 1920×1080 afmetingen en schaalt die
-// visueel terug met CSS transform — daardoor kloppen de auto-fit metingen exact.
 const PREVIEW_SCALE = 0.5;
-const PREVIEW_W = Math.round(1920 * PREVIEW_SCALE); // 960
-const PREVIEW_H = Math.round(1080 * PREVIEW_SCALE); // 540
 
 function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeOverride, onFontSizeChange, onTitleSizeChange, onSave, onClose }: {
-  title: string;
-  content: string;
-  image: string | null;
-  fontSizeOverride: number;
-  titleSizeOverride: number;
-  onFontSizeChange: (v: number) => void;
-  onTitleSizeChange: (v: number) => void;
-  onSave: () => void;
-  onClose: () => void;
+  title: string; content: string; image: string | null;
+  fontSizeOverride: number; titleSizeOverride: number;
+  onFontSizeChange: (v: number) => void; onTitleSizeChange: (v: number) => void;
+  onSave: () => void; onClose: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(PREVIEW_SCALE);
@@ -388,8 +507,7 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const fit = el.clientWidth / 1920;
-    setScale(fit);
+    setScale(el.clientWidth / 1920);
   }, []);
 
   const bodySliderVal  = fontSizeOverride  > 0 ? fontSizeOverride  : 1.5;
@@ -400,29 +518,18 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-panel" onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="preview-panel-header">
           <span className="preview-panel-title">Schermpreview</span>
           <button type="button" className="btn-icon" onClick={onClose} aria-label="Sluiten"><span className="btn-icon-svg">{Icons.xMark}</span></button>
         </div>
-
-        {/* Scaled slide */}
         <div ref={stageRef} className="preview-stage" style={{ height: Math.round(1080 * scale) }}>
           <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute' }}>
-            {/* Identieke structuur als de echte Slideshow — elke afwijking
-                veroorzaakt een verschil in gemeten hoogte / breedte en dus
-                een ander resultaat van de binary search. */}
             <div className="slideshow-root" style={{ width: 1920, height: 1080 }}>
               <div className="slide-header">
                 <div className="header-logo-block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.png" alt="VV Hooglanderveen" width={54} height={54}
-                    className="club-logo" style={{ objectFit: 'contain' }} />
-                  <div className="header-club-name">
-                    VV Hooglanderveen
-                    <span>Clubnieuws</span>
-                  </div>
+                  <img src="/logo.png" alt="VV Hooglanderveen" width={54} height={54} className="club-logo" style={{ objectFit: 'contain' }} />
+                  <div className="header-club-name">VV Hooglanderveen<span>Clubnieuws</span></div>
                 </div>
                 <div className="header-middle" />
                 <div className="header-right">
@@ -435,15 +542,8 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
               </div>
               <div className="slides-viewport">
                 <div className={`slide-body active${image ? ' has-image' : ''}`}>
-                  {/* Geen cat-bar (preview toont altijd pagina 1) */}
                   <div className="slide-text-outer">
-                    <AutoFitSlide
-                      title={title || '(geen titel)'}
-                      content={content}
-                      image={image}
-                      fontSizeOverride={fontSizeOverride}
-                      titleSizeOverride={titleSizeOverride}
-                    />
+                    <AutoFitSlide title={title || '(geen titel)'} content={content} image={image} fontSizeOverride={fontSizeOverride} titleSizeOverride={titleSizeOverride} />
                   </div>
                   {image && (
                     <div className="slide-img-wrap">
@@ -460,38 +560,20 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
             </div>
           </div>
         </div>
-
-        {/* Grootte bediening */}
         <div className="preview-controls">
-          {/* Titelgrootte */}
           <div className="preview-controls-row">
             <span className="preview-controls-label">Titelgrootte:</span>
-            <button type="button" className={`btn btn-sm${titleAuto ? ' btn-yellow' : ' btn-ghost'}`}
-              onClick={() => onTitleSizeChange(0)}>Auto</button>
-            <input type="range" min={1.2} max={8} step={0.1}
-              value={titleSliderVal}
-              onChange={e => onTitleSizeChange(Number(e.target.value))}
-              className="preview-slider" />
-            <span className="preview-size-val">
-              {titleAuto ? <em>auto-fit</em> : `${titleSizeOverride.toFixed(1)} rem`}
-            </span>
+            <button type="button" className={`btn btn-sm${titleAuto ? ' btn-yellow' : ' btn-ghost'}`} onClick={() => onTitleSizeChange(0)}>Auto</button>
+            <input type="range" min={1.2} max={8} step={0.1} value={titleSliderVal} onChange={e => onTitleSizeChange(Number(e.target.value))} className="preview-slider" />
+            <span className="preview-size-val">{titleAuto ? <em>auto-fit</em> : `${titleSizeOverride.toFixed(1)} rem`}</span>
           </div>
-          {/* Tekstgrootte */}
           <div className="preview-controls-row">
             <span className="preview-controls-label">Tekstgrootte:</span>
-            <button type="button" className={`btn btn-sm${bodyAuto ? ' btn-yellow' : ' btn-ghost'}`}
-              onClick={() => onFontSizeChange(0)}>Auto</button>
-            <input type="range" min={0.9} max={3.5} step={0.05}
-              value={bodySliderVal}
-              onChange={e => onFontSizeChange(Number(e.target.value))}
-              className="preview-slider" />
-            <span className="preview-size-val">
-              {bodyAuto ? <em>auto-fit</em> : `${fontSizeOverride.toFixed(2)} rem`}
-            </span>
+            <button type="button" className={`btn btn-sm${bodyAuto ? ' btn-yellow' : ' btn-ghost'}`} onClick={() => onFontSizeChange(0)}>Auto</button>
+            <input type="range" min={0.9} max={3.5} step={0.05} value={bodySliderVal} onChange={e => onFontSizeChange(Number(e.target.value))} className="preview-slider" />
+            <span className="preview-size-val">{bodyAuto ? <em>auto-fit</em> : `${fontSizeOverride.toFixed(2)} rem`}</span>
           </div>
         </div>
-
-        {/* Acties */}
         <div className="preview-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>Sluiten</button>
           <button type="button" className="btn btn-yellow" onClick={onSave}>Opslaan</button>
@@ -524,7 +606,6 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   };
 
   const hasContent = stripTags(form.content).length > 0;
-  // Stabiele ID-prefix per formulierinstantie (nieuw vs. bewerken)
   const uid = initial ? 'edit' : 'new';
 
   return (
@@ -534,10 +615,8 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
       <div className="form-section">
         <label htmlFor={`${uid}-title`} className="form-label">Titel <span className="required">*</span></label>
         <input id={`${uid}-title`} className="form-input form-input-lg"
-          value={form.title}
-          onChange={e => set('title', e.target.value)}
-          placeholder="Grote kop op het nieuwsscherm"
-          required />
+          value={form.title} onChange={e => set('title', e.target.value)}
+          placeholder="Grote kop op het nieuwsscherm" required />
       </div>
 
       {/* Tekst */}
@@ -549,33 +628,23 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
       {/* Preview + paginaindeling */}
       {(form.title || hasContent) && (
         <div className="form-section form-preview-row">
-          <button
-            type="button"
-            className="btn btn-blue btn-sm preview-open-btn"
-            onClick={() => { setPreviewFontSize(form.font_size); setPreviewTitleSize(form.title_size); setPreviewOpen(true); }}
-          >
-            <span className="btn-icon-svg">{Icons.eye}</span>
-            Schermpreview
+          <button type="button" className="btn btn-blue btn-sm preview-open-btn"
+            onClick={() => { setPreviewFontSize(form.font_size); setPreviewTitleSize(form.title_size); setPreviewOpen(true); }}>
+            <span className="btn-icon-svg">{Icons.eye}</span>Schermpreview
           </button>
           {hasContent && (
-            <button type="button" className="btn btn-ghost btn-sm"
-              onClick={() => setShowPages(p => !p)}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowPages(p => !p)}>
               {showPages ? '▲ Paginaindeling verbergen' : '▼ Paginaindeling bekijken'}
             </button>
           )}
         </div>
       )}
       {showPages && hasContent && <PaginaPreview content={form.content} hasImage={!!form.image} />}
-
       {previewOpen && (
         <SlidePreviewModal
-          title={form.title}
-          content={form.content}
-          image={form.image}
-          fontSizeOverride={previewFontSize}
-          titleSizeOverride={previewTitleSize}
-          onFontSizeChange={setPreviewFontSize}
-          onTitleSizeChange={setPreviewTitleSize}
+          title={form.title} content={form.content} image={form.image}
+          fontSizeOverride={previewFontSize} titleSizeOverride={previewTitleSize}
+          onFontSizeChange={setPreviewFontSize} onTitleSizeChange={setPreviewTitleSize}
           onSave={() => { set('font_size', previewFontSize); set('title_size', previewTitleSize); setPreviewOpen(false); }}
           onClose={() => setPreviewOpen(false)}
         />
@@ -610,15 +679,40 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           Weergaveduur
         </label>
         <div className="duration-value">
-          <input
-            type="number" min={5} max={60} step={1}
+          <input type="number" min={5} max={60} step={1}
             value={form.duration}
             onChange={e => set('duration', Math.min(60, Math.max(5, Number(e.target.value) || DEFAULT_DURATION)))}
-            className="duration-input"
-          />
+            className="duration-input" />
           <span className="duration-unit">seconden</span>
         </div>
         <div className="duration-hint">Standaard: {DEFAULT_DURATION}s · min. 5s · max. 60s</div>
+      </div>
+
+      {/* Vervaldatum */}
+      <div className="form-section">
+        <label htmlFor={`${uid}-expires`} className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="btn-icon-svg" style={{ width: 14, height: 14 }}>{Icons.calendar}</span>
+          Vervalt op
+          <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 2, textTransform: 'none', letterSpacing: 0 }}>
+            (optioneel)
+          </span>
+        </label>
+        <input
+          id={`${uid}-expires`}
+          type="datetime-local"
+          className="form-input"
+          value={form.expires_at ?? ''}
+          onChange={e => set('expires_at', e.target.value || null)}
+        />
+        {form.expires_at && (
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4, alignSelf: 'flex-start' }}
+            onClick={() => set('expires_at', null)}>
+            Vervaldatum verwijderen
+          </button>
+        )}
+        <div className="expires-hint">
+          Na deze datum verdwijnt het bericht automatisch uit de slideshow en gaat het naar het archief.
+        </div>
       </div>
 
       <div className="form-actions">
@@ -632,7 +726,7 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   );
 }
 
-/* ── EditDrawer (slide-in panel) ── */
+/* ── EditDrawer ── */
 function EditDrawer({ bericht, onSave, onClose }: {
   bericht: Bericht;
   onSave: (f: FormState) => Promise<void>;
@@ -648,7 +742,16 @@ function EditDrawer({ bericht, onSave, onClose }: {
         </div>
         <div className="drawer-body">
           <BerichtForm
-            initial={{ title: bericht.title, content: bericht.content, image: bericht.image, ticker: bericht.ticker, duration: bericht.duration ?? DEFAULT_DURATION, font_size: bericht.font_size ?? 0, title_size: bericht.title_size ?? 0 }}
+            initial={{
+              title: bericht.title,
+              content: bericht.content,
+              image: bericht.image,
+              ticker: bericht.ticker,
+              duration: bericht.duration ?? DEFAULT_DURATION,
+              font_size: bericht.font_size ?? 0,
+              title_size: bericht.title_size ?? 0,
+              expires_at: toDatetimeLocal(bericht.expires_at) || null,
+            }}
             onSave={onSave}
             onCancel={onClose}
             saveLabel="Wijzigingen opslaan"
@@ -693,12 +796,9 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
   }, [fetchItems]);
 
   useEffect(() => {
-    triggerFetch(); // eerste fetch bij openen tab
-    const id = setInterval(() => triggerFetch(true), 5 * 60 * 1000); // elke 5 min
-    return () => {
-      clearInterval(id);
-      if (toastRef.current) clearTimeout(toastRef.current);
-    };
+    triggerFetch();
+    const id = setInterval(() => triggerFetch(true), 5 * 60 * 1000);
+    return () => { clearInterval(id); if (toastRef.current) clearTimeout(toastRef.current); };
   }, [triggerFetch]);
 
   const handleReject = async (item: RssItem) => {
@@ -730,15 +830,13 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
 
   return (
     <div className="rss-inbox-root">
-      {/* Header */}
       <div className="dash-topbar">
         <div className="dash-topbar-title">
           RSS Inbox
           {items.length > 0 && <span className="rss-count-badge">{items.length}</span>}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => triggerFetch()} disabled={loading}>
-          <span className="btn-icon-svg">{Icons.refresh}</span>
-          Vernieuwen
+          <span className="btn-icon-svg">{Icons.refresh}</span>Vernieuwen
         </button>
       </div>
 
@@ -761,24 +859,17 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
               <div className="rss-item-meta">
                 <span className="rss-item-date">{item.pub_date ? fmtDate(item.pub_date) : 'Onbekende datum'}</span>
                 {item.link && (
-                  <a href={item.link} target="_blank" rel="noreferrer" className="rss-item-link">
-                    ↗ Bekijk op site
-                  </a>
+                  <a href={item.link} target="_blank" rel="noreferrer" className="rss-item-link">↗ Bekijk op site</a>
                 )}
               </div>
               <div className="rss-item-title">{item.title || '(geen titel)'}</div>
               {item.content && (
-                <div
-                  className="rss-item-preview"
-                  dangerouslySetInnerHTML={{
-                    __html: item.content.replace(/<[^>]+>/g, ' ').slice(0, 200) + (item.content.length > 200 ? '…' : ''),
-                  }}
-                />
+                <div className="rss-item-preview"
+                  dangerouslySetInnerHTML={{ __html: item.content.replace(/<[^>]+>/g, ' ').slice(0, 200) + (item.content.length > 200 ? '…' : '') }} />
               )}
               <div className="rss-item-actions">
                 <button className="btn btn-yellow btn-sm" onClick={() => setEditing(item)}>
-                  <span className="btn-icon-svg">{Icons.pencil}</span>
-                  Bewerken & publiceren
+                  <span className="btn-icon-svg">{Icons.pencil}</span>Bewerken & publiceren
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => handleReject(item)} style={{ color: 'var(--red)' }}>
                   Afwijzen
@@ -789,7 +880,6 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
         </div>
       )}
 
-      {/* Edit & publish drawer */}
       {editing && (
         <>
           <div className="drawer-overlay" onClick={() => setEditing(null)} />
@@ -802,20 +892,10 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
               <div className="rss-source-note">
                 <span className="btn-icon-svg" style={{ display: 'inline-flex', marginRight: 4 }}>{Icons.rss}</span>
                 Bron: RSS feed vvhooglanderveen.nl
-                {editing.link && (
-                  <a href={editing.link} target="_blank" rel="noreferrer"> — bekijk origineel ↗</a>
-                )}
+                {editing.link && <a href={editing.link} target="_blank" rel="noreferrer"> — bekijk origineel ↗</a>}
               </div>
               <BerichtForm
-                initial={{
-                  title: editing.title,
-                  content: editing.content,
-                  image: null,
-                  ticker: true,
-                  duration: DEFAULT_DURATION,
-                  font_size: 0,
-                  title_size: 0,
-                }}
+                initial={{ title: editing.title, content: editing.content, image: null, ticker: true, duration: DEFAULT_DURATION, font_size: 0, title_size: 0, expires_at: null }}
                 onSave={handlePublish}
                 onCancel={() => setEditing(null)}
                 saveLabel="Publiceren op nieuwsscherm"
@@ -832,13 +912,21 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
 
 /* ── Beheer main ── */
 export default function Beheer() {
-  const [berichten, setBerichten] = useState<Bericht[]>([]);
-  const [toast, setToast] = useState({ msg: '', err: false, show: false });
-  const [editing, setEditing] = useState<Bericht | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'berichten' | 'rss'>('berichten');
-  const [rssPending, setRssPending] = useState(0);
+  const [berichten, setBerichten]           = useState<Bericht[]>([]);
+  const [archivedBerichten, setArchived]    = useState<Bericht[]>([]);
+  const [archiveOpen, setArchiveOpen]       = useState(false);
+  const [toast, setToast]                   = useState({ msg: '', err: false, show: false });
+  const [editing, setEditing]               = useState<Bericht | null>(null);
+  const [newOpen, setNewOpen]               = useState(false);
+  const [search, setSearch]                 = useState('');
+  const [activeTab, setActiveTab]           = useState<'berichten' | 'rss'>('berichten');
+  const [rssPending, setRssPending]         = useState(0);
+  const [sortMode, setSortMode]             = useState<'manual' | 'date'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('beheer_sort') as 'manual' | 'date') ?? 'manual';
+    }
+    return 'manual';
+  });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, err = false) => {
@@ -856,6 +944,15 @@ export default function Beheer() {
     } catch {}
   }, []);
 
+  const fetchArchived = useCallback(async () => {
+    try {
+      const res = await fetch('/api/berichten?archived=true');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setArchived(data);
+    } catch {}
+  }, []);
+
   const fetchRssBadge = useCallback(async () => {
     try {
       const res = await fetch('/api/rss');
@@ -867,18 +964,16 @@ export default function Beheer() {
 
   useEffect(() => {
     fetchBerichten();
+    fetchArchived();
     fetchRssBadge();
-    const id = setInterval(fetchRssBadge, 60_000); // badge elke minuut updaten
-    return () => {
-      clearInterval(id);
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
-  }, [fetchBerichten, fetchRssBadge]);
+    const id = setInterval(fetchRssBadge, 60_000);
+    return () => { clearInterval(id); if (toastTimer.current) clearTimeout(toastTimer.current); };
+  }, [fetchBerichten, fetchArchived, fetchRssBadge]);
 
   const handleAdd = async (form: FormState) => {
     const res = await fetch('/api/berichten', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, category: 'nieuws' }),
+      body: JSON.stringify({ ...form, category: 'nieuws', expires_at: form.expires_at?.trim() || null }),
     });
     if (!res.ok) { showToast('Fout bij opslaan', true); return; }
     await fetchBerichten();
@@ -890,7 +985,7 @@ export default function Beheer() {
     if (!editing) return;
     const res = await fetch(`/api/berichten/${editing.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, category: editing.category }),
+      body: JSON.stringify({ ...form, category: editing.category, expires_at: form.expires_at?.trim() || null }),
     });
     if (!res.ok) { showToast('Fout bij opslaan', true); return; }
     await fetchBerichten();
@@ -905,9 +1000,26 @@ export default function Beheer() {
     showToast('Bericht verwijderd');
   };
 
+  const handleRestore = async (b: Bericht) => {
+    await fetch(`/api/berichten/${b.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived_at: null, expires_at: null, active: true }),
+    });
+    await Promise.all([fetchBerichten(), fetchArchived()]);
+    showToast('Bericht hersteld ✓');
+  };
+
+  const handleDeleteArchived = async (id: number) => {
+    if (!confirm('Bericht definitief verwijderen uit archief?')) return;
+    await fetch(`/api/berichten/${id}`, { method: 'DELETE' });
+    await fetchArchived();
+    showToast('Verwijderd uit archief');
+  };
+
   // ── Drag & drop volgorde ──────────────────────────────────────────────
   const dragIdx = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const canDrag = !search && sortMode === 'manual';
 
   const handleDragStart = (idx: number) => { dragIdx.current = idx; };
   const handleDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOver(idx); };
@@ -916,21 +1028,14 @@ export default function Beheer() {
   const handleDrop = async (dropIdx: number) => {
     const from = dragIdx.current;
     if (from === null || from === dropIdx) { setDragOver(null); return; }
-
-    // Herorden de lijst lokaal
     const reordered = [...berichten];
     const [moved] = reordered.splice(from, 1);
     reordered.splice(dropIdx, 0, moved);
-
-    // Optimistisch updaten
     setBerichten(reordered);
     setDragOver(null);
     dragIdx.current = null;
-
-    // Sla nieuwe sort_order op
     await fetch('/api/berichten', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reordered.map((b, i) => ({ id: b.id, sort_order: i }))),
     });
   };
@@ -943,13 +1048,23 @@ export default function Beheer() {
     await fetchBerichten();
   };
 
-  const activeCount = berichten.filter(b => b.active).length;
-  const tickerCount = berichten.filter(b => b.ticker && b.active).length;
+  // ── Sortering ──────────────────────────────────────────────────────────
+  const toggleSort = (mode: 'manual' | 'date') => {
+    setSortMode(mode);
+    localStorage.setItem('beheer_sort', mode);
+  };
 
-  const filtered = berichten.filter(b =>
+  const sorted = sortMode === 'date'
+    ? [...berichten].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    : berichten;
+
+  const filtered = sorted.filter(b =>
     !search || b.title.toLowerCase().includes(search.toLowerCase()) ||
     stripTags(b.content).toLowerCase().includes(search.toLowerCase())
   );
+
+  const activeCount = berichten.filter(b => b.active).length;
+  const tickerCount = berichten.filter(b => b.ticker && b.active).length;
 
   return (
     <div className="dash-root">
@@ -965,17 +1080,11 @@ export default function Beheer() {
         </div>
 
         <nav className="dash-nav">
-          <div
-            className={`dash-nav-item${activeTab === 'berichten' ? ' active' : ''}`}
-            onClick={() => setActiveTab('berichten')}
-          >
+          <div className={`dash-nav-item${activeTab === 'berichten' ? ' active' : ''}`} onClick={() => setActiveTab('berichten')}>
             <span className="dash-nav-icon">{Icons.list}</span>
             <span>Berichten</span>
           </div>
-          <div
-            className={`dash-nav-item${activeTab === 'rss' ? ' active' : ''}`}
-            onClick={() => setActiveTab('rss')}
-          >
+          <div className={`dash-nav-item${activeTab === 'rss' ? ' active' : ''}`} onClick={() => setActiveTab('rss')}>
             <span className="dash-nav-icon">{Icons.rss}</span>
             <span>RSS Inbox</span>
             {rssPending > 0 && <span className="rss-nav-badge">{rssPending}</span>}
@@ -1004,7 +1113,6 @@ export default function Beheer() {
       {/* ── Main ── */}
       <main className="dash-main">
 
-        {/* RSS Inbox tab */}
         {activeTab === 'rss' && (
           <RssInbox onPublished={() => { fetchBerichten(); fetchRssBadge(); }} />
         )}
@@ -1052,7 +1160,7 @@ export default function Beheer() {
           </div>
         </div>
 
-        {/* Zoekbalk */}
+        {/* Zoekbalk + sorteerkeuze */}
         <div className="dash-search-row">
           <div className="dash-search-wrap">
             <span className="dash-search-icon">{Icons.search}</span>
@@ -1062,7 +1170,29 @@ export default function Beheer() {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {search && <button className="dash-search-clear" onClick={() => setSearch('')} aria-label="Zoekopdracht wissen"><span className="btn-icon-svg" style={{width:12,height:12}}>{Icons.xMark}</span></button>}
+            {search && (
+              <button className="dash-search-clear" onClick={() => setSearch('')} aria-label="Zoekopdracht wissen">
+                <span className="btn-icon-svg" style={{width:12,height:12}}>{Icons.xMark}</span>
+              </button>
+            )}
+          </div>
+          <div className="sort-toggle-group">
+            <button
+              type="button"
+              className={`btn btn-sm${sortMode === 'manual' ? ' btn-blue' : ' btn-ghost'}`}
+              onClick={() => toggleSort('manual')}
+              title="Versleep rijen om de volgorde aan te passen"
+            >
+              Handmatig
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm${sortMode === 'date' ? ' btn-blue' : ' btn-ghost'}`}
+              onClick={() => toggleSort('date')}
+              title="Nieuwste berichten bovenaan"
+            >
+              Op datum
+            </button>
           </div>
           <div className="dash-result-count">{filtered.length} bericht{filtered.length !== 1 ? 'en' : ''}</div>
         </div>
@@ -1078,8 +1208,8 @@ export default function Beheer() {
             </div>
           ) : (
             <div className="dash-table">
-              <div className={`dash-table-head${search ? ' no-drag' : ''}`}>
-                {!search && <div />}
+              <div className={`dash-table-head${!canDrag ? ' no-drag' : ''}`}>
+                {canDrag && <div />}
                 <div>Bericht</div>
                 <div>Status</div>
                 <div>Datum</div>
@@ -1089,22 +1219,17 @@ export default function Beheer() {
                 <div
                   key={b.id}
                   className={`dash-row${b.active ? '' : ' dash-row-inactive'}${dragOver === idx ? ' drag-over' : ''}`}
-                  style={search ? { gridTemplateColumns: '1fr 160px 130px 140px', padding: '12px 16px' } : undefined}
-                  draggable={!search}
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={e => handleDragOver(e, idx)}
-                  onDrop={() => handleDrop(idx)}
+                  style={!canDrag ? { gridTemplateColumns: '1fr 160px 130px 140px', padding: '12px 16px' } : undefined}
+                  draggable={canDrag}
+                  onDragStart={() => canDrag && handleDragStart(idx)}
+                  onDragOver={e => canDrag && handleDragOver(e, idx)}
+                  onDrop={() => canDrag && handleDrop(idx)}
                   onDragEnd={handleDragEnd}
                 >
-
-                  {/* Grip handle */}
-                  {!search && (
-                    <div className="dash-row-grip" title="Versleep om volgorde te wijzigen">
-                      {Icons.grip}
-                    </div>
+                  {canDrag && (
+                    <div className="dash-row-grip" title="Versleep om volgorde te wijzigen">{Icons.grip}</div>
                   )}
 
-                  {/* Bericht info */}
                   <div className="dash-row-info">
                     {b.image && (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1117,26 +1242,23 @@ export default function Beheer() {
                           {stripTags(b.content).slice(0, 120)}{stripTags(b.content).length > 120 ? '…' : ''}
                         </div>
                       )}
+                      <ExpiryBadge expires_at={b.expires_at} />
                     </div>
                   </div>
 
-                  {/* Status badges */}
                   <div className="dash-row-status">
                     <label className="dash-toggle" title={b.active ? 'Klik om te verbergen' : 'Klik om te tonen'}>
-                      <input type="checkbox" checked={b.active}
-                        onChange={() => patch(b, { active: !b.active })} />
+                      <input type="checkbox" checked={b.active} onChange={() => patch(b, { active: !b.active })} />
                       <span className="dash-toggle-track" />
                       <span className="dash-toggle-label">{b.active ? 'Zichtbaar' : 'Verborgen'}</span>
                     </label>
                     <label className="dash-toggle dash-toggle-yellow" title="Ticker aan/uit">
-                      <input type="checkbox" checked={b.ticker}
-                        onChange={() => patch(b, { ticker: !b.ticker })} />
+                      <input type="checkbox" checked={b.ticker} onChange={() => patch(b, { ticker: !b.ticker })} />
                       <span className="dash-toggle-track" />
                       <span className="dash-toggle-label">Ticker</span>
                     </label>
                   </div>
 
-                  {/* Datum + duur */}
                   <div className="dash-row-date">
                     <div>{fmtDate(b.created_at)}</div>
                     <div className="dash-duration-badge" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -1145,11 +1267,9 @@ export default function Beheer() {
                     </div>
                   </div>
 
-                  {/* Acties */}
                   <div className="dash-row-actions">
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} aria-label={`Bewerken: ${b.title}`}>
-                      <span className="btn-icon-svg">{Icons.pencil}</span>
-                      Bewerken
+                      <span className="btn-icon-svg">{Icons.pencil}</span>Bewerken
                     </button>
                     <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} aria-label={`Verwijderen: ${b.title}`}>
                       <span className="btn-icon-svg">{Icons.trash}</span>
@@ -1158,6 +1278,72 @@ export default function Beheer() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* ── Archief ── */}
+        <div className="archive-section">
+          <button type="button" className="archive-toggle" onClick={() => setArchiveOpen(o => !o)}>
+            <span className="btn-icon-svg" style={{width:16,height:16}}>{Icons.archive}</span>
+            <span>Archief</span>
+            {archivedBerichten.length > 0 && (
+              <span className="archive-count-badge">{archivedBerichten.length}</span>
+            )}
+            <span className="archive-toggle-arrow">{archiveOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {archiveOpen && (
+            archivedBerichten.length === 0 ? (
+              <div className="dash-card">
+                <div className="dash-empty">
+                  <div className="dash-empty-icon">{Icons.archive}</div>
+                  <div className="dash-empty-text">Archief is leeg.</div>
+                </div>
+              </div>
+            ) : (
+              <div className="dash-card">
+                <div className="dash-table">
+                  <div className="dash-table-head no-drag" style={{ gridTemplateColumns: '1fr 140px 200px' }}>
+                    <div>Bericht</div>
+                    <div>Gearchiveerd op</div>
+                    <div>Acties</div>
+                  </div>
+                  {archivedBerichten.map(b => (
+                    <div
+                      key={b.id}
+                      className="dash-row dash-row-inactive"
+                      style={{ gridTemplateColumns: '1fr 140px 200px', padding: '12px 16px' }}
+                    >
+                      <div className="dash-row-info">
+                        {b.image && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img className="dash-row-thumb" src={b.image} alt="" />
+                        )}
+                        <div className="dash-row-text">
+                          <div className="dash-row-title">{b.title}</div>
+                          {stripTags(b.content).length > 0 && (
+                            <div className="dash-row-preview">
+                              {stripTags(b.content).slice(0, 100)}{stripTags(b.content).length > 100 ? '…' : ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="dash-row-date">
+                        {b.archived_at ? fmtDate(b.archived_at) : '—'}
+                      </div>
+                      <div className="dash-row-actions">
+                        <button className="btn btn-ghost btn-sm" onClick={() => handleRestore(b)}>
+                          <span className="btn-icon-svg">{Icons.restore}</span>Herstellen
+                        </button>
+                        <button className="btn btn-red btn-sm icon-only" onClick={() => handleDeleteArchived(b.id)} aria-label={`Verwijderen: ${b.title}`}>
+                          <span className="btn-icon-svg">{Icons.trash}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
           )}
         </div>
 

@@ -5,7 +5,7 @@ import { Bericht } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_CATEGORIES = ['nieuws', 'wedstrijd', 'selectie', 'jeugd', 'overig'] as const;
-const MAX_IMAGE_BYTES = 700_000; // ~500KB base64
+const MAX_IMAGE_BYTES = 2_800_000; // ~2MB na base64-overhead
 
 function clampDuration(v: unknown): number {
   return Math.max(1, Math.min(120, Number(v) || 10));
@@ -21,25 +21,53 @@ function sanitizeCategory(v: unknown): Bericht['category'] {
 
 function toRow(r: Record<string, unknown>): Bericht {
   return {
-    id:         Number(r.id),
-    title:      String(r.title),
-    content:    String(r.content ?? ''),
-    category:   sanitizeCategory(r.category),
-    active:     Number(r.active) === 1,
-    ticker:     Number(r.ticker ?? 1) === 1,
-    image:      r.image ? String(r.image) : null,
-    created_at: String(r.created_at),
-    sort_order: Number(r.sort_order ?? 0),
-    duration:   Number(r.duration ?? 10),
-    font_size:  Number(r.font_size ?? 0),
-    title_size: Number(r.title_size ?? 0),
+    id:          Number(r.id),
+    title:       String(r.title),
+    content:     String(r.content ?? ''),
+    category:    sanitizeCategory(r.category),
+    active:      Number(r.active) === 1,
+    ticker:      Number(r.ticker ?? 1) === 1,
+    image:       r.image ? String(r.image) : null,
+    created_at:  String(r.created_at),
+    sort_order:  Number(r.sort_order ?? 0),
+    duration:    Number(r.duration ?? 10),
+    font_size:   Number(r.font_size ?? 0),
+    title_size:  Number(r.title_size ?? 0),
+    expires_at:  r.expires_at  ? String(r.expires_at)  : null,
+    archived_at: r.archived_at ? String(r.archived_at) : null,
   };
 }
 
-export async function GET() {
+/**
+ * Archiveer verlopen berichten bij elke API-aanroep.
+ * Zet archived_at = now() op berichten waarvan expires_at in het verleden ligt
+ * en die nog niet gearchiveerd zijn.
+ */
+async function autoArchive() {
+  await db.execute(
+    `UPDATE berichten
+     SET archived_at = datetime('now','localtime')
+     WHERE expires_at IS NOT NULL
+       AND expires_at < datetime('now','localtime')
+       AND archived_at IS NULL`
+  );
+}
+
+export async function GET(req: NextRequest) {
   try {
     await initDb();
-    const result = await db.execute('SELECT * FROM berichten ORDER BY sort_order ASC, id DESC');
+    await autoArchive();
+
+    const archived = req.nextUrl.searchParams.get('archived') === 'true';
+
+    const result = archived
+      ? await db.execute(
+          'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
+        )
+      : await db.execute(
+          'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id DESC'
+        );
+
     return NextResponse.json(result.rows.map(r => toRow(r as Record<string, unknown>)));
   } catch (e) {
     console.error('[GET /api/berichten]', e);
@@ -68,27 +96,30 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       title, content = '', active = true, ticker = true, image = null,
-      duration, font_size, title_size,
+      duration, font_size, title_size, expires_at = null,
     } = body;
 
     if (!title?.trim()) return NextResponse.json({ error: 'Titel is verplicht' }, { status: 400 });
     if (title.length > 500) return NextResponse.json({ error: 'Titel te lang (max 500 tekens)' }, { status: 400 });
     if (content.length > 100_000) return NextResponse.json({ error: 'Inhoud te lang' }, { status: 400 });
     if (image && typeof image === 'string' && image.length > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: 'Afbeelding te groot (max ~500KB)' }, { status: 400 });
+      return NextResponse.json({ error: 'Afbeelding te groot (max ~2MB)' }, { status: 400 });
     }
 
     const category  = sanitizeCategory(body.category);
     const dur       = clampDuration(duration);
     const fontSize  = clampFontSize(font_size);
     const titleSize = clampFontSize(title_size);
+    const expiresAt = expires_at && typeof expires_at === 'string' ? expires_at.trim() || null : null;
 
     const maxResult = await db.execute('SELECT MAX(sort_order) as m FROM berichten');
     const maxOrder  = Number(maxResult.rows[0]?.m ?? 0);
 
     const result = await db.execute({
-      sql: 'INSERT INTO berichten (title, content, category, active, ticker, image, sort_order, duration, font_size, title_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [title.trim(), content, category, active ? 1 : 0, ticker ? 1 : 0, image, maxOrder + 1, dur, fontSize, titleSize],
+      sql: `INSERT INTO berichten
+              (title, content, category, active, ticker, image, sort_order, duration, font_size, title_size, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [title.trim(), content, category, active ? 1 : 0, ticker ? 1 : 0, image, maxOrder + 1, dur, fontSize, titleSize, expiresAt],
     });
 
     const row = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(result.lastInsertRowid)] });

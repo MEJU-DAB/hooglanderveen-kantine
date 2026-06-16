@@ -46,6 +46,9 @@ export async function initDb() {
   `);
   // Migratie: cache-kolom voor webscraping van volledige tekst
   try { await db.execute("ALTER TABLE rss_inbox ADD COLUMN fulltext_fetched_at TEXT"); } catch {}
+  // Migratie: vervaldatum + archiefstatus op berichten
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN expires_at  TEXT"); } catch {}
+  try { await db.execute("ALTER TABLE berichten ADD COLUMN archived_at TEXT"); } catch {}
   initialized = true;
 }
 
