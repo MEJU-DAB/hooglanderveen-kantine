@@ -44,6 +44,8 @@ export async function initDb() {
       bericht_id INTEGER
     );
   `);
+  // Migratie: cache-kolom voor webscraping van volledige tekst
+  try { await db.execute("ALTER TABLE rss_inbox ADD COLUMN fulltext_fetched_at TEXT"); } catch {}
   initialized = true;
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db, { initDb } from '@/lib/db';
-import { parseRss } from '@/lib/rss';
+import { parseRss, isTruncated, scrapeFullContent } from '@/lib/rss';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,6 @@ export const dynamic = 'force-dynamic';
  * Vercel stuurt automatisch Authorization: Bearer <CRON_SECRET>.
  */
 export async function GET(req: NextRequest) {
-  // Verifieer dat het verzoek van Vercel Cron komt
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,6 +25,7 @@ export async function GET(req: NextRequest) {
   let xml: string;
   try {
     const res = await fetch(rssUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     xml = await res.text();
   } catch (e) {
     return NextResponse.json({ error: `Kon feed niet ophalen: ${e}` }, { status: 502 });
@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
   const countRes = await db.execute('SELECT COUNT(*) as c FROM rss_inbox');
   const isFirstRun = Number(countRes.rows[0].c) === 0;
 
-  let added = 0;
+  // Fase 1: voeg nieuwe items in
+  const newItems: { id: number; link: string; content: string }[] = [];
   for (const item of items) {
     const res = await db.execute({
       sql: `INSERT OR IGNORE INTO rss_inbox (guid, title, content, link, pub_date, status)
@@ -53,9 +54,30 @@ export async function GET(req: NextRequest) {
         isFirstRun ? 'seen' : 'pending',
       ],
     });
-    if (Number(res.rowsAffected) > 0 && !isFirstRun) added++;
+    if (Number(res.rowsAffected) > 0 && !isFirstRun) {
+      newItems.push({ id: Number(res.lastInsertRowid), link: item.link, content: item.content });
+    }
   }
 
-  console.log(`[cron/rss] ${isFirstRun ? 'Geïnitialiseerd' : `${added} nieuw`} (${items.length} totaal)`);
-  return NextResponse.json({ added, total: items.length, initialized: isFirstRun });
+  // Fase 2: scrape volledige tekst voor afgekapte items (300ms tussenpoos)
+  let scraped = 0;
+  for (const item of newItems) {
+    if (!isTruncated(item.content) || !item.link) continue;
+    await delay(300);
+    const full = await scrapeFullContent(item.link, item.content);
+    if (full) {
+      await db.execute({
+        sql: `UPDATE rss_inbox SET content = ?, fulltext_fetched_at = datetime('now','localtime') WHERE id = ?`,
+        args: [full, item.id],
+      });
+      scraped++;
+    }
+  }
+
+  console.log(`[cron/rss] ${isFirstRun ? 'Geïnitialiseerd' : `${newItems.length} nieuw, ${scraped} gescraped`} (${items.length} totaal)`);
+  return NextResponse.json({ added: newItems.length, scraped, total: items.length, initialized: isFirstRun });
+}
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
