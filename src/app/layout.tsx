@@ -14,6 +14,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl">
+      {/* IE=edge,chrome=1 zorgt dat CEF/Electron-gebaseerde WebViews de modernste engine gebruiken */}
+      <head>
+        <meta httpEquiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+      </head>
       <body>{children}</body>
     </html>
   );
