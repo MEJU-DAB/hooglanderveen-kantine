@@ -14,15 +14,16 @@ function fmtTime() {
 interface SlideItem extends Bericht {
   _page: number;
   _pages: number;
+  _berichtId: number; // origineel bericht-ID, ongewijzigd bij multi-page splits
 }
 
 function splitBericht(b: Bericht): SlideItem[] {
-  if (!b.content) return [{ ...b, _page: 1, _pages: 1 }];
+  if (!b.content) return [{ ...b, _page: 1, _pages: 1, _berichtId: b.id }];
   const maxPerPage = b.image ? 3500 : 6000;
   const chunks = splitContent(b.content, maxPerPage);
-  if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1 }];
+  if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1, _berichtId: b.id }];
   return chunks.map((chunk, i) => ({
-    ...b, id: b.id * 10000 + i, content: chunk, _page: i + 1, _pages: chunks.length,
+    ...b, id: b.id * 10000 + i, content: chunk, _page: i + 1, _pages: chunks.length, _berichtId: b.id,
   }));
 }
 
@@ -395,7 +396,7 @@ export default function Slideshow({
               {b.image && (
                 <div className="slide-img-wrap">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={b.image} alt={b.title} />
+                  <img src={`/api/image/${b._berichtId}`} alt={b.title} />
                 </div>
               )}
             </div>
