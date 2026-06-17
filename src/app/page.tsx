@@ -1,7 +1,7 @@
 import { getCachedFeed } from '@/lib/berichtenCache';
 import Slideshow from '@/components/Slideshow';
 
-export const revalidate = 60; // ISR: Vercel edge hergebruikt de HTML 60s
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   let initialBerichten = [] as import('@/lib/types').Bericht[];
