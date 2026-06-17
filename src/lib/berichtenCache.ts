@@ -3,7 +3,7 @@ import { Bericht } from '@/lib/types';
 
 const TTL_MS = 60_000; // 60 seconden
 
-type CacheEntry = { data: Bericht[]; fetchedAt: number };
+type CacheEntry = { data: Bericht[]; pushedAt: number; fetchedAt: number };
 let cache: CacheEntry | null = null;
 
 function sanitizeCategory(v: unknown): Bericht['category'] {
@@ -30,7 +30,7 @@ function toRow(r: Record<string, unknown>): Bericht {
   };
 }
 
-async function fetchFromDb(): Promise<Bericht[]> {
+async function fetchFromDb(): Promise<{ data: Bericht[]; pushedAt: number }> {
   await initDb();
 
   // Auto-archiveer verlopen berichten
@@ -42,20 +42,24 @@ async function fetchFromDb(): Promise<Bericht[]> {
        AND archived_at IS NULL`
   );
 
-  const result = await db.execute(
-    'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'
-  );
-  return result.rows.map(r => toRow(r as Record<string, unknown>));
+  const [berichtenResult, configResult] = await Promise.all([
+    db.execute('SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'),
+    db.execute("SELECT value FROM config WHERE key = 'last_pushed_at'"),
+  ]);
+
+  const data = berichtenResult.rows.map(r => toRow(r as Record<string, unknown>));
+  const pushedAt = Number(configResult.rows[0]?.value ?? 0);
+  return { data, pushedAt };
 }
 
-export async function getCachedBerichten(): Promise<Bericht[]> {
+export async function getCachedFeed(): Promise<{ berichten: Bericht[]; pushedAt: number }> {
   const now = Date.now();
   if (cache && now - cache.fetchedAt < TTL_MS) {
-    return cache.data;
+    return { berichten: cache.data, pushedAt: cache.pushedAt };
   }
-  const data = await fetchFromDb();
-  cache = { data, fetchedAt: now };
-  return data;
+  const { data, pushedAt } = await fetchFromDb();
+  cache = { data, pushedAt, fetchedAt: now };
+  return { berichten: data, pushedAt };
 }
 
 export function invalidateBerichtenCache(): void {

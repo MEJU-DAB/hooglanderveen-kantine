@@ -49,6 +49,16 @@ export async function initDb() {
   // Migratie: vervaldatum + archiefstatus op berichten
   try { await db.execute("ALTER TABLE berichten ADD COLUMN expires_at  TEXT"); } catch {}
   try { await db.execute("ALTER TABLE berichten ADD COLUMN archived_at TEXT"); } catch {}
+
+  // Config-tabel voor globale app-instellingen (push-timestamp e.d.)
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS config (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    INSERT OR IGNORE INTO config (key, value) VALUES ('last_pushed_at', '0');
+  `);
+
   initialized = true;
 }
 

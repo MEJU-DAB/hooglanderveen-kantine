@@ -919,6 +919,8 @@ export default function Beheer() {
   const [editing, setEditing]               = useState<Bericht | null>(null);
   const [newOpen, setNewOpen]               = useState(false);
   const [flushLoading, setFlushLoading]     = useState(false);
+  const [pushLoading, setPushLoading]       = useState(false);
+  const [pushLabel, setPushLabel]           = useState<string | null>(null);
   const [search, setSearch]                 = useState('');
   const [activeTab, setActiveTab]           = useState<'berichten' | 'rss'>('berichten');
   const [rssPending, setRssPending]         = useState(0);
@@ -1015,6 +1017,23 @@ export default function Beheer() {
     await fetch(`/api/berichten/${id}`, { method: 'DELETE' });
     await fetchArchived();
     showToast('Verwijderd uit archief');
+  };
+
+  const handlePush = async () => {
+    setPushLoading(true);
+    setPushLabel(null);
+    try {
+      const res = await fetch('/api/admin/push', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      const { pushedAt } = await res.json();
+      const time = new Date(pushedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+      setPushLabel(`✓ Gepusht om ${time}`);
+      setTimeout(() => setPushLabel(null), 5000);
+    } catch {
+      showToast('Push mislukt', true);
+    } finally {
+      setPushLoading(false);
+    }
   };
 
   const handleFlushCache = async () => {
@@ -1137,6 +1156,17 @@ export default function Beheer() {
           <div className="dash-topbar-title">Berichten beheren</div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
+              className="btn btn-yellow"
+              onClick={handlePush}
+              disabled={pushLoading}
+              title="Stuur de nieuwste berichten direct naar alle schermen"
+            >
+              <span className="btn-icon-svg">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 0 1 .75.75v8.69l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 1.06-1.06l2.72 2.72V2.75A.75.75 0 0 1 10 2ZM3 15.75a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z"/></svg>
+              </span>
+              {pushLoading ? 'Pushen…' : (pushLabel ?? 'Push naar schermen')}
+            </button>
+            <button
               className="btn btn-ghost btn-sm"
               onClick={handleFlushCache}
               disabled={flushLoading}
@@ -1145,7 +1175,7 @@ export default function Beheer() {
               <span className="btn-icon-svg">{Icons.refresh}</span>
               {flushLoading ? 'Bezig…' : 'Cache legen'}
             </button>
-            <button className="btn btn-yellow" onClick={() => setNewOpen(true)}>
+            <button className="btn btn-ghost" onClick={() => setNewOpen(true)}>
               <span className="btn-icon-svg">{Icons.plus}</span>
               Nieuw bericht
             </button>

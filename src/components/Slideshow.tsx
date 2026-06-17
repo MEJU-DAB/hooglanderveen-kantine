@@ -153,9 +153,19 @@ function fingerprint(bs: Bericht[]): string {
   ).join('|');
 }
 
-export default function Slideshow({ initialBerichten = [] }: { initialBerichten?: Bericht[] }) {
+export default function Slideshow({
+  initialBerichten = [],
+  initialPushedAt  = 0,
+}: {
+  initialBerichten?: Bericht[];
+  initialPushedAt?: number;
+}) {
   const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
-  const berichtenFpRef = useRef(fingerprint(initialBerichten));
+  // animationEpoch stijgt bij elke push-reset; verandert de React key op slides
+  // zodat ze opnieuw worden gemount en de CSS-animatie herstart vanuit frame 0.
+  const [animationEpoch, setAnimationEpoch] = useState(0);
+  const berichtenFpRef  = useRef(fingerprint(initialBerichten));
+  const lastPushedAtRef = useRef<number>(initialPushedAt);
   const activeRef = useRef<SlideItem[]>([]);
 
   const active: SlideItem[] = useMemo(
@@ -172,15 +182,26 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
     try {
       const res = await fetch('/api/berichten', { cache: 'no-store' });
       if (!res.ok) return;
-      const data = await res.json();
-      if (!Array.isArray(data)) return;
-      // Alleen re-renderen als data daadwerkelijk veranderd is.
-      // Dit voorkomt dat 30s-polls onnodige re-renders veroorzaken die
-      // useMemo-berekeningen en keyframe-checks triggeren.
-      const fp = fingerprint(data);
-      if (fp !== berichtenFpRef.current) {
-        berichtenFpRef.current = fp;
+      const json = await res.json();
+
+      // Response is { berichten: Bericht[], pushedAt: number }
+      if (!json || !Array.isArray(json.berichten)) return;
+      const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
+
+      if (pushedAt !== lastPushedAtRef.current) {
+        // Beheerder heeft actief gepusht — volledige reset: nieuwe data + animatie
+        // opnieuw starten bij slide 0.
+        lastPushedAtRef.current = pushedAt;
+        berichtenFpRef.current  = fingerprint(data);
         setBerichten(data);
+        setAnimationEpoch(e => e + 1);
+      } else {
+        // Geen push — alleen re-renderen als de data daadwerkelijk veranderd is.
+        const fp = fingerprint(data);
+        if (fp !== berichtenFpRef.current) {
+          berichtenFpRef.current = fp;
+          setBerichten(data);
+        }
       }
     } catch {}
   }, []);
@@ -202,31 +223,42 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
   }, [fetchBerichten]);
 
   // Injecteer @keyframes in <head> zodra de actieve slideset verandert.
-  // Regels:
-  //  1. Alleen updaten als de gegenereerde CSS écht verschilt van wat er al staat.
-  //  2. De bestaande <style>-tag NOOIT verwijderen — updaat textContent in-place.
-  //     Verwijdering invalideert de CSSOM, waardoor de browser alle lopende
-  //     CSS-animaties (incl. de ticker) even reset → zichtbare flikkering.
-  //  3. Cleanup (unmount) zit in een aparte effect met lege deps zodat hij
-  //     nooit per ongeluk vóór een re-injectie draait.
+  // Bij animationEpoch > 0 (push-reset) wordt de stijl altijd verwijderd en
+  // opnieuw aangemaakt zodat de browser alle animatietimers herstart — bewust
+  // een CSSOM-invalideringsflits op dat moment, want dat is precies het doel.
+  // Bij gewone data-updates wordt textContent in-place bijgewerkt (geen flits).
   const activeKey = active.map(s => `${s.id}:${s.duration}`).join(',');
-  const lastCssRef = useRef('');
+  const lastCssRef     = useRef('');
+  const lastEpochRef   = useRef(0);
 
   useEffect(() => {
     if (active.length === 0) return;
-    const css = buildKeyframes(active);
-    if (css === lastCssRef.current) return; // identiek — niets doen
+    const css          = buildKeyframes(active);
+    const isPushReset  = animationEpoch !== lastEpochRef.current;
+    lastEpochRef.current = animationEpoch;
+
+    if (!isPushReset && css === lastCssRef.current) return; // niets veranderd
     lastCssRef.current = css;
 
-    let el = document.getElementById('slideshow-keyframes') as HTMLStyleElement | null;
-    if (!el) {
-      el = document.createElement('style');
+    if (isPushReset) {
+      // Verwijder en hermaak → browser herstart alle animatietimers
+      document.getElementById('slideshow-keyframes')?.remove();
+      const el = document.createElement('style');
       el.id = 'slideshow-keyframes';
+      el.textContent = css;
       document.head.appendChild(el);
+    } else {
+      // Gewone data-update: in-place zodat ticker-animatie niet flikkert
+      let el = document.getElementById('slideshow-keyframes') as HTMLStyleElement | null;
+      if (!el) {
+        el = document.createElement('style');
+        el.id = 'slideshow-keyframes';
+        document.head.appendChild(el);
+      }
+      el.textContent = css;
     }
-    el.textContent = css; // in-place update — geen CSSOM-invalideringsflits
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey]);
+  }, [activeKey, animationEpoch]);
 
   // Cleanup alleen bij unmount — NIET bij elke activeKey-wijziging
   useEffect(() => {
@@ -284,7 +316,7 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
         ) : (
           active.map((b, i) => (
             <div
-              key={b.id}
+              key={`${b.id}-${animationEpoch}`}
               className={`slide-body${b.image ? ' has-image' : ''}`}
               style={{
                 animationName: `slide-anim-${i}`,

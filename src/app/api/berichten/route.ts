@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
-import { getCachedBerichten, invalidateBerichtenCache } from '@/lib/berichtenCache';
+import { getCachedFeed, invalidateBerichtenCache } from '@/lib/berichtenCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
-    const rows = await getCachedBerichten();
-    return NextResponse.json(rows, {
+    const feed = await getCachedFeed();
+    return NextResponse.json(feed, {
       headers: { 'Cache-Control': 's-maxage=0, must-revalidate' },
     });
   } catch (e) {
