@@ -936,7 +936,9 @@ export default function Beheer() {
     try {
       const res = await fetch('/api/berichten');
       if (!res.ok) return;
-      const data = await res.json();
+      const json = await res.json();
+      // Response is { berichten: Bericht[], pushedAt: number }
+      const data = Array.isArray(json) ? json : json?.berichten;
       if (Array.isArray(data)) setBerichten(data);
     } catch {}
   }, []);
