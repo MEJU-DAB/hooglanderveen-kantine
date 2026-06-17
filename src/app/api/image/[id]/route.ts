@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db, { initDb } from '@/lib/db';
 
-export const dynamic = 'force-dynamic';
+// Geen force-dynamic export: Vercel CDN respecteert de s-maxage in de response-headers
+// en serveert de afbeelding na de eerste aanvraag direct vanuit de edge.
 
 // Proxyt de afbeelding van een bericht zodat de WebView alleen het eigen
 // domein nodig heeft — Cloudinary-URLs zijn niet altijd bereikbaar vanuit
@@ -35,7 +36,7 @@ export async function GET(
       return new NextResponse(buffer, {
         headers: {
           'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+          'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
         },
       });
     }
@@ -48,7 +49,7 @@ export async function GET(
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
       },
     });
   } catch (e) {
