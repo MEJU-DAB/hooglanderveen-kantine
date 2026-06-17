@@ -924,12 +924,6 @@ export default function Beheer() {
   const [search, setSearch]                 = useState('');
   const [activeTab, setActiveTab]           = useState<'berichten' | 'rss'>('berichten');
   const [rssPending, setRssPending]         = useState(0);
-  const [sortMode, setSortMode]             = useState<'manual' | 'date'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('beheer_sort') as 'manual' | 'date') ?? 'manual';
-    }
-    return 'manual';
-  });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, err = false) => {
@@ -1051,7 +1045,7 @@ export default function Beheer() {
   // ── Drag & drop volgorde ──────────────────────────────────────────────
   const dragIdx = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
-  const canDrag = !search && sortMode === 'manual';
+  const canDrag = !search;
 
   const handleDragStart = (idx: number) => { dragIdx.current = idx; };
   const handleDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOver(idx); };
@@ -1081,14 +1075,9 @@ export default function Beheer() {
   };
 
   // ── Sortering ──────────────────────────────────────────────────────────
-  const toggleSort = (mode: 'manual' | 'date') => {
-    setSortMode(mode);
-    localStorage.setItem('beheer_sort', mode);
-  };
-
-  const sorted = sortMode === 'date'
-    ? [...berichten].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    : berichten;
+  const sorted = [...berichten].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
   const filtered = sorted.filter(b =>
     !search || b.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -1229,24 +1218,6 @@ export default function Beheer() {
                 <span className="btn-icon-svg" style={{width:12,height:12}}>{Icons.xMark}</span>
               </button>
             )}
-          </div>
-          <div className="sort-toggle-group">
-            <button
-              type="button"
-              className={`btn btn-sm${sortMode === 'manual' ? ' btn-blue' : ' btn-ghost'}`}
-              onClick={() => toggleSort('manual')}
-              title="Versleep rijen om de volgorde aan te passen"
-            >
-              Handmatig
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm${sortMode === 'date' ? ' btn-blue' : ' btn-ghost'}`}
-              onClick={() => toggleSort('date')}
-              title="Nieuwste berichten bovenaan"
-            >
-              Op datum
-            </button>
           </div>
           <div className="dash-result-count">{filtered.length} bericht{filtered.length !== 1 ? 'en' : ''}</div>
         </div>
