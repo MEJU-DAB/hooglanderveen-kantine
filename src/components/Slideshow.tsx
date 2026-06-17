@@ -194,7 +194,7 @@ export default function Slideshow({ initialBerichten = [] }: { initialBerichten?
       }
     };
     initial();
-    const id = setInterval(fetchBerichten, 30000);
+    const id = setInterval(fetchBerichten, 120000);
     return () => {
       clearInterval(id);
       if (retryId) clearTimeout(retryId);

@@ -68,7 +68,16 @@ export async function GET(req: NextRequest) {
           'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'
         );
 
-    return NextResponse.json(result.rows.map(r => toRow(r as Record<string, unknown>)));
+    const rows = result.rows.map(r => toRow(r as Record<string, unknown>));
+
+    // Alleen de publieke slideshow-feed cachen; archief-queries zijn beheer-only
+    const cacheHeader = archived
+      ? 'no-store'
+      : 's-maxage=60, stale-while-revalidate=300';
+
+    return NextResponse.json(rows, {
+      headers: { 'Cache-Control': cacheHeader },
+    });
   } catch (e) {
     console.error('[GET /api/berichten]', e);
     return NextResponse.json({ error: 'Database onbereikbaar' }, { status: 503 });

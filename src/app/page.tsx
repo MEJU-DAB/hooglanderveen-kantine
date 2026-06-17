@@ -2,7 +2,7 @@ import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
 import Slideshow from '@/components/Slideshow';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60; // ISR: Vercel edge hergebruikt de HTML 60s
 
 function toRow(r: Record<string, unknown>): Bericht {
   return {
