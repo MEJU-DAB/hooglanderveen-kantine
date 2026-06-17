@@ -41,25 +41,30 @@ function toRow(r: Record<string, unknown>): Bericht {
 
 export async function GET(req: NextRequest) {
   try {
-    const archived = req.nextUrl.searchParams.get('archived') === 'true';
+    const archived   = req.nextUrl.searchParams.get('archived') === 'true';
+    // Standaard worden base64-afbeeldingen weggelaten (~99% bandbreedtebesparing).
+    // Gebruik ?images=true om ze mee te sturen (beheer-panel, push-refresh).
+    const withImages = req.nextUrl.searchParams.get('images') === 'true';
 
     if (archived) {
-      // Archief-query: altijd vers, geen cache
       await initDb();
       const result = await db.execute(
         'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
       );
-      return NextResponse.json(
-        result.rows.map(r => toRow(r as Record<string, unknown>)),
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      const rows = result.rows.map(r => toRow(r as Record<string, unknown>));
+      return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
     const feed = await getCachedFeed();
-    return NextResponse.json(feed, {
-      headers: { 'Cache-Control': 's-maxage=0, must-revalidate' },
-    });
+    const berichten = withImages
+      ? feed.berichten
+      : feed.berichten.map(b => ({ ...b, image: null }));
+
+    return NextResponse.json(
+      { berichten, pushedAt: feed.pushedAt },
+      { headers: { 'Cache-Control': 's-maxage=0, must-revalidate' } },
+    );
   } catch (e) {
     console.error('[GET /api/berichten]', e);
     return NextResponse.json({ error: 'Database onbereikbaar' }, { status: 503 });

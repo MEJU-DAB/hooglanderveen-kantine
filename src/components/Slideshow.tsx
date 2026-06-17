@@ -167,6 +167,11 @@ export default function Slideshow({
   const berichtenFpRef  = useRef(fingerprint(initialBerichten));
   const lastPushedAtRef = useRef<number>(initialPushedAt);
   const activeRef = useRef<SlideItem[]>([]);
+  // Lokale image-cache: bewaart base64-strings per bericht-id zodat lite-polls
+  // (zonder images) de afbeeldingen niet uit de slideshow laten verdwijnen.
+  const imageMapRef = useRef<Map<number, string | null>>(
+    new Map(initialBerichten.map(b => [b.id, b.image])),
+  );
 
   const active: SlideItem[] = useMemo(
     () => berichten.filter(b => b.active).flatMap(splitBericht),
@@ -178,33 +183,54 @@ export default function Slideshow({
     [active],
   );
 
+  const applyBerichten = useCallback((data: Bericht[], isPush: boolean) => {
+    // Herstel images uit de lokale cache voor lite-responses (image === null)
+    const merged = data.map(b => ({
+      ...b,
+      image: b.image ?? imageMapRef.current.get(b.id) ?? null,
+    }));
+    // Sla eventuele nieuwe images op in de cache
+    merged.forEach(b => { if (b.image) imageMapRef.current.set(b.id, b.image); });
+
+    berichtenFpRef.current = fingerprint(data);
+    setBerichten(merged);
+    if (isPush) setAnimationEpoch(e => e + 1);
+  }, []);
+
   const fetchBerichten = useCallback(async () => {
     try {
+      // Lite-poll: geen base64-afbeeldingen (~99% minder bandbreedte).
       const res = await fetch('/api/berichten', { cache: 'no-store' });
       if (!res.ok) return;
       const json = await res.json();
-
-      // Response is { berichten: Bericht[], pushedAt: number }
       if (!json || !Array.isArray(json.berichten)) return;
-      const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
 
-      if (pushedAt !== lastPushedAtRef.current) {
-        // Beheerder heeft actief gepusht — volledige reset: nieuwe data + animatie
-        // opnieuw starten bij slide 0.
+      const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
+      const isPush   = pushedAt !== lastPushedAtRef.current;
+      const hasNewId = data.some(b => !imageMapRef.current.has(b.id));
+
+      if (isPush || hasNewId) {
+        // Bij push of nieuwe berichten: haal images op zodat ze direct zichtbaar zijn.
         lastPushedAtRef.current = pushedAt;
-        berichtenFpRef.current  = fingerprint(data);
-        setBerichten(data);
-        setAnimationEpoch(e => e + 1);
+        try {
+          const full = await fetch('/api/berichten?images=true', { cache: 'no-store' });
+          if (full.ok) {
+            const fullJson = await full.json();
+            if (Array.isArray(fullJson?.berichten)) {
+              fullJson.berichten.forEach((b: Bericht) => {
+                if (b.image) imageMapRef.current.set(b.id, b.image);
+              });
+            }
+          }
+        } catch {}
+        applyBerichten(data, isPush);
       } else {
-        // Geen push — alleen re-renderen als de data daadwerkelijk veranderd is.
+        // Geen push, geen nieuwe berichten — alleen re-renderen bij gewijzigde data.
         const fp = fingerprint(data);
-        if (fp !== berichtenFpRef.current) {
-          berichtenFpRef.current = fp;
-          setBerichten(data);
-        }
+        if (fp !== berichtenFpRef.current) applyBerichten(data, false);
       }
     } catch {}
-  }, []);
+  }, [applyBerichten]);
 
   useEffect(() => {
     let retryId: ReturnType<typeof setTimeout> | null = null;

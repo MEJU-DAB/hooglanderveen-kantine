@@ -934,7 +934,7 @@ export default function Beheer() {
 
   const fetchBerichten = useCallback(async () => {
     try {
-      const res = await fetch('/api/berichten');
+      const res = await fetch('/api/berichten?images=true');
       if (!res.ok) return;
       const json = await res.json();
       // Response is { berichten: Bericht[], pushedAt: number }
