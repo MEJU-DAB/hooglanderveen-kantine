@@ -918,6 +918,7 @@ export default function Beheer() {
   const [toast, setToast]                   = useState({ msg: '', err: false, show: false });
   const [editing, setEditing]               = useState<Bericht | null>(null);
   const [newOpen, setNewOpen]               = useState(false);
+  const [flushLoading, setFlushLoading]     = useState(false);
   const [search, setSearch]                 = useState('');
   const [activeTab, setActiveTab]           = useState<'berichten' | 'rss'>('berichten');
   const [rssPending, setRssPending]         = useState(0);
@@ -1014,6 +1015,18 @@ export default function Beheer() {
     await fetch(`/api/berichten/${id}`, { method: 'DELETE' });
     await fetchArchived();
     showToast('Verwijderd uit archief');
+  };
+
+  const handleFlushCache = async () => {
+    setFlushLoading(true);
+    try {
+      await fetch('/api/admin/flush-cache', { method: 'POST' });
+      showToast('Cache geleegd — nieuwe berichten zijn binnen 60 seconden zichtbaar');
+    } catch {
+      showToast('Cache legen mislukt', true);
+    } finally {
+      setFlushLoading(false);
+    }
   };
 
   // ── Drag & drop volgorde ──────────────────────────────────────────────
@@ -1122,10 +1135,21 @@ export default function Beheer() {
         {/* Top bar */}
         <div className="dash-topbar">
           <div className="dash-topbar-title">Berichten beheren</div>
-          <button className="btn btn-yellow" onClick={() => setNewOpen(true)}>
-            <span className="btn-icon-svg">{Icons.plus}</span>
-            Nieuw bericht
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={handleFlushCache}
+              disabled={flushLoading}
+              title="Ververs de server-cache direct"
+            >
+              <span className="btn-icon-svg">{Icons.refresh}</span>
+              {flushLoading ? 'Bezig…' : 'Cache legen'}
+            </button>
+            <button className="btn btn-yellow" onClick={() => setNewOpen(true)}>
+              <span className="btn-icon-svg">{Icons.plus}</span>
+              Nieuw bericht
+            </button>
+          </div>
         </div>
 
         {/* Stats */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
+import { getCachedBerichten, invalidateBerichtenCache } from '@/lib/berichtenCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,45 +39,26 @@ function toRow(r: Record<string, unknown>): Bericht {
   };
 }
 
-/**
- * Archiveer verlopen berichten bij elke API-aanroep.
- * Zet archived_at = now() op berichten waarvan expires_at in het verleden ligt
- * en die nog niet gearchiveerd zijn.
- */
-async function autoArchive() {
-  await db.execute(
-    `UPDATE berichten
-     SET archived_at = datetime('now','localtime')
-     WHERE expires_at IS NOT NULL
-       AND expires_at < datetime('now','localtime')
-       AND archived_at IS NULL`
-  );
-}
-
 export async function GET(req: NextRequest) {
   try {
-    await initDb();
-    await autoArchive();
-
     const archived = req.nextUrl.searchParams.get('archived') === 'true';
 
-    const result = archived
-      ? await db.execute(
-          'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
-        )
-      : await db.execute(
-          'SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'
-        );
+    if (archived) {
+      // Archief-query: altijd vers, geen cache
+      await initDb();
+      const result = await db.execute(
+        'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
+      );
+      return NextResponse.json(
+        result.rows.map(r => toRow(r as Record<string, unknown>)),
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
 
-    const rows = result.rows.map(r => toRow(r as Record<string, unknown>));
-
-    // Alleen de publieke slideshow-feed cachen; archief-queries zijn beheer-only
-    const cacheHeader = archived
-      ? 'no-store'
-      : 's-maxage=60, stale-while-revalidate=300';
-
+    // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
+    const rows = await getCachedBerichten();
     return NextResponse.json(rows, {
-      headers: { 'Cache-Control': cacheHeader },
+      headers: { 'Cache-Control': 's-maxage=0, must-revalidate' },
     });
   } catch (e) {
     console.error('[GET /api/berichten]', e);
@@ -92,6 +74,7 @@ export async function PATCH(req: NextRequest) {
     for (const { id, sort_order } of items) {
       await db.execute({ sql: 'UPDATE berichten SET sort_order = ? WHERE id = ?', args: [sort_order, id] });
     }
+    invalidateBerichtenCache();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[PATCH /api/berichten]', e);
@@ -132,6 +115,7 @@ export async function POST(req: NextRequest) {
     });
 
     const row = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(result.lastInsertRowid)] });
+    invalidateBerichtenCache();
     return NextResponse.json(toRow(row.rows[0] as Record<string, unknown>), { status: 201 });
   } catch (e) {
     console.error('[POST /api/berichten]', e);
