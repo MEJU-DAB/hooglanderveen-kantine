@@ -166,6 +166,7 @@ export default function Slideshow({
   const [animationEpoch, setAnimationEpoch] = useState(0);
   const berichtenFpRef  = useRef(fingerprint(initialBerichten));
   const lastPushedAtRef = useRef<number>(initialPushedAt);
+  const etagRef         = useRef<string>('');
   const activeRef = useRef<SlideItem[]>([]);
   // Lokale image-cache: bewaart base64-strings per bericht-id zodat lite-polls
   // (zonder images) de afbeeldingen niet uit de slideshow laten verdwijnen.
@@ -199,9 +200,15 @@ export default function Slideshow({
 
   const fetchBerichten = useCallback(async () => {
     try {
-      // Lite-poll: geen base64-afbeeldingen (~99% minder bandbreedte).
-      const res = await fetch('/api/berichten', { cache: 'no-store' });
+      // Lite-poll: geen base64-afbeeldingen. ETag geeft 304 als data ongewijzigd is.
+      const headers: HeadersInit = etagRef.current
+        ? { 'If-None-Match': etagRef.current }
+        : {};
+      const res = await fetch('/api/berichten', { cache: 'no-store', headers });
+      if (res.status === 304) return; // niets veranderd — stop hier
       if (!res.ok) return;
+      const newEtag = res.headers.get('etag');
+      if (newEtag) etagRef.current = newEtag;
       const json = await res.json();
       if (!json || !Array.isArray(json.berichten)) return;
 
@@ -242,9 +249,18 @@ export default function Slideshow({
     };
     initial();
     const id = setInterval(fetchBerichten, 120000);
+
+    // Fetch direct bij terugkeer vanuit slaapstand / achtergrondtab.
+    // Voorkomt verouderde content na nacht zonder polls.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchBerichten();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       clearInterval(id);
       if (retryId) clearTimeout(retryId);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [fetchBerichten]);
 

@@ -288,15 +288,29 @@ function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: 
     setCompressing(true);
     try {
       const { dataUrl, originalKb, compressedKb } = await compressImage(file);
-      // Controleer de uiteindelijke grootte (max 2 MB)
       const b64 = dataUrl.split(',')[1] ?? '';
       const bytes = Math.round(b64.length * 3 / 4);
       if (bytes > 2_000_000) {
         setError(`Afbeelding te groot na compressie (${Math.round(bytes / 1024)} KB). Gebruik een kleinere afbeelding.`);
         return;
       }
+
+      // Upload naar Cloudinary; val terug op base64 als dat niet lukt.
+      let imageValue = dataUrl;
+      try {
+        const up = await fetch('/api/admin/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl }),
+        });
+        if (up.ok) {
+          const { url } = await up.json() as { url: string };
+          imageValue = url;
+        }
+      } catch {}
+
       setSizeInfo({ originalKb, compressedKb });
-      onChange(dataUrl);
+      onChange(imageValue);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kon afbeelding niet verwerken');
     } finally {

@@ -3,6 +3,16 @@ import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
 import { getCachedFeed, invalidateBerichtenCache } from '@/lib/berichtenCache';
 
+/** Lichtgewicht hash voor ETag-berekening (geen crypto nodig). */
+function makeETag(berichten: Bericht[], pushedAt: number): string {
+  const str = `${pushedAt}|${berichten.map(b =>
+    `${b.id}:${b.active ? 1 : 0}:${b.sort_order}:${b.duration}:${b.title.slice(0, 30)}`
+  ).join(',')}`;
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 33) ^ str.charCodeAt(i)) >>> 0;
+  return `"${h.toString(36)}"`;
+}
+
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_CATEGORIES = ['nieuws', 'wedstrijd', 'selectie', 'jeugd', 'overig'] as const;
@@ -57,13 +67,21 @@ export async function GET(req: NextRequest) {
 
     // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
     const feed = await getCachedFeed();
-    const berichten = withImages
-      ? feed.berichten
-      : feed.berichten.map(b => ({ ...b, image: null }));
+    const liteBerichten = feed.berichten.map(b => ({ ...b, image: null }));
+    const etag = makeETag(liteBerichten, feed.pushedAt);
 
+    // 304 Not Modified als de client al de actuele versie heeft
+    if (req.headers.get('if-none-match') === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { 'ETag': etag, 'Cache-Control': 's-maxage=0, must-revalidate' },
+      });
+    }
+
+    const berichten = withImages ? feed.berichten : liteBerichten;
     return NextResponse.json(
       { berichten, pushedAt: feed.pushedAt },
-      { headers: { 'Cache-Control': 's-maxage=0, must-revalidate' } },
+      { headers: { 'Cache-Control': 's-maxage=0, must-revalidate', 'ETag': etag } },
     );
   } catch (e) {
     console.error('[GET /api/berichten]', e);
