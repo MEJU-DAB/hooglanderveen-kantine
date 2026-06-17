@@ -168,10 +168,16 @@ export default function Slideshow({
   const lastPushedAtRef = useRef<number>(initialPushedAt);
   const etagRef         = useRef<string>('');
   const activeRef = useRef<SlideItem[]>([]);
-  // Lokale image-cache: bewaart base64-strings per bericht-id zodat lite-polls
+  // Lokale image-cache: bewaart image-URLs per bericht-id zodat lite-polls
   // (zonder images) de afbeeldingen niet uit de slideshow laten verdwijnen.
+  // Alleen berichten MET een image worden vooraf gevuld — null-waarden worden
+  // weggelaten zodat de eerste poll altijd ?images=true ophaalt.
   const imageMapRef = useRef<Map<number, string | null>>(
-    new Map(initialBerichten.map(b => [b.id, b.image])),
+    new Map(
+      initialBerichten
+        .filter(b => b.image != null)
+        .map(b => [b.id, b.image]),
+    ),
   );
 
   const active: SlideItem[] = useMemo(
