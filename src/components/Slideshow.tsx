@@ -150,10 +150,11 @@ function ClockWidget() {
   return <span className="slide-time">{time}</span>;
 }
 
-// Lichte fingerprint: alleen velden die de slideshow/ticker beïnvloeden
+// Lichte fingerprint: alleen velden die de slideshow/ticker beïnvloeden.
+// image-aanwezigheid (0/1) meenemen zodat null→URL een re-render triggert.
 function fingerprint(bs: Bericht[]): string {
   return bs.map(b =>
-    `${b.id}:${b.active ? 1 : 0}:${b.ticker ? 1 : 0}:${b.duration}:${b.sort_order}:${b.title.slice(0, 40)}`,
+    `${b.id}:${b.active ? 1 : 0}:${b.ticker ? 1 : 0}:${b.duration}:${b.sort_order}:${b.title.slice(0, 40)}:${b.image ? 1 : 0}`,
   ).join('|');
 }
 
