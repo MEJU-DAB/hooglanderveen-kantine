@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht } from '@/lib/types';
@@ -19,7 +19,10 @@ interface SlideItem extends Bericht {
 
 function splitBericht(b: Bericht): SlideItem[] {
   if (!b.content) return [{ ...b, _page: 1, _pages: 1, _berichtId: b.id }];
-  const maxPerPage = b.image ? 3500 : 6000;
+  // Vaste drempel onafhankelijk van image-aanwezigheid: voorkomt dat de slide-
+  // structuur (en dus activeKey) verandert zodra image laadt na de eerste poll.
+  // AutoFitSlide past de lettergrootte al aan op de beschikbare ruimte.
+  const maxPerPage = 3500;
   const chunks = splitContent(b.content, maxPerPage);
   if (chunks.length === 1) return [{ ...b, _page: 1, _pages: 1, _berichtId: b.id }];
   return chunks.map((chunk, i) => ({
@@ -86,7 +89,7 @@ function buildKeyframes(slides: SlideItem[]): string {
   return css;
 }
 
-function Ticker({ items }: { items: string[] }) {
+const Ticker = memo(function Ticker({ items }: { items: string[] }) {
   if (items.length === 0) {
     return (
       <div className="slide-footer slide-footer-static">
@@ -135,7 +138,10 @@ function Ticker({ items }: { items: string[] }) {
       </div>
     </div>
   );
-}
+}, (prev, next) =>
+  prev.items.length === next.items.length &&
+  prev.items.every((t, i) => t === next.items[i]),
+);
 
 function ClockWidget() {
   const [time, setTime] = useState('');
@@ -186,9 +192,11 @@ export default function Slideshow({
     [berichten],
   );
   activeRef.current = active;
+  // tickerItems hangt direct af van berichten, niet van active/splitBericht.
+  // Zo triggert een image-update (null → URL) de Ticker niet opnieuw.
   const tickerItems = useMemo(
-    () => active.filter(b => b.ticker && b._page === 1).map(b => b.title),
-    [active],
+    () => berichten.filter(b => b.active && b.ticker).map(b => b.title),
+    [berichten],
   );
 
   const applyBerichten = useCallback((data: Bericht[], isPush: boolean) => {
