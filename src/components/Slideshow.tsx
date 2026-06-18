@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bericht } from '@/lib/types';
@@ -89,7 +89,7 @@ function buildKeyframes(slides: SlideItem[]): string {
   return css;
 }
 
-const Ticker = memo(function Ticker({ items }: { items: string[] }) {
+function Ticker({ items }: { items: string[] }) {
   if (items.length === 0) {
     return (
       <div className="slide-footer slide-footer-static">
@@ -138,10 +138,7 @@ const Ticker = memo(function Ticker({ items }: { items: string[] }) {
       </div>
     </div>
   );
-}, (prev, next) =>
-  prev.items.length === next.items.length &&
-  prev.items.every((t, i) => t === next.items[i]),
-);
+}
 
 function ClockWidget() {
   const [time, setTime] = useState('');
@@ -192,11 +189,9 @@ export default function Slideshow({
     [berichten],
   );
   activeRef.current = active;
-  // tickerItems hangt direct af van berichten, niet van active/splitBericht.
-  // Zo triggert een image-update (null → URL) de Ticker niet opnieuw.
   const tickerItems = useMemo(
-    () => berichten.filter(b => b.active && b.ticker).map(b => b.title),
-    [berichten],
+    () => active.filter(b => b.ticker && b._page === 1).map(b => b.title),
+    [active],
   );
 
   const applyBerichten = useCallback((data: Bericht[], isPush: boolean) => {
