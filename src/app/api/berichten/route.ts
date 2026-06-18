@@ -51,10 +51,10 @@ function toRow(r: Record<string, unknown>): Bericht {
 
 export async function GET(req: NextRequest) {
   try {
-    const archived   = req.nextUrl.searchParams.get('archived') === 'true';
-    // Standaard worden base64-afbeeldingen weggelaten (~99% bandbreedtebesparing).
-    // Gebruik ?images=true om ze mee te sturen (beheer-panel, push-refresh).
-    const withImages = req.nextUrl.searchParams.get('images') === 'true';
+    const archived    = req.nextUrl.searchParams.get('archived') === 'true';
+    // Images worden standaard meegestuurd (Cloudinary-URLs zijn kort, ~80 chars).
+    // Gebruik ?images=false om ze weg te laten indien ooit nodig.
+    const skipImages  = req.nextUrl.searchParams.get('images') === 'false';
 
     if (archived) {
       await initDb();
@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
 
     // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
     const feed = await getCachedFeed();
+    // ETag op lite-berichten (zonder image) zodat Cloudinary-URLs de hash
+    // niet beïnvloeden — de ETag signaleert alleen inhoudelijke wijzigingen.
     const liteBerichten = feed.berichten.map(b => ({ ...b, image: null }));
     const etag = makeETag(liteBerichten, feed.pushedAt);
 
@@ -78,7 +80,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const berichten = withImages ? feed.berichten : liteBerichten;
+    // Stuur altijd images mee: Cloudinary-URLs zijn kort (~80 chars) en
+    // veroorzaken geen bandbreedteprobleem meer. ?images=false voor beheer
+    // dat de zware archiefquery doet.
+    const berichten = skipImages ? liteBerichten : feed.berichten;
     return NextResponse.json(
       { berichten, pushedAt: feed.pushedAt },
       { headers: { 'Cache-Control': 's-maxage=0, must-revalidate', 'ETag': etag } },

@@ -172,17 +172,6 @@ export default function Slideshow({
   const lastPushedAtRef = useRef<number>(initialPushedAt);
   const etagRef         = useRef<string>('');
   const activeRef = useRef<SlideItem[]>([]);
-  // Lokale image-cache: bewaart image-URLs per bericht-id zodat lite-polls
-  // (zonder images) de afbeeldingen niet uit de slideshow laten verdwijnen.
-  // Alleen berichten MET een image worden vooraf gevuld — null-waarden worden
-  // weggelaten zodat de eerste poll altijd ?images=true ophaalt.
-  const imageMapRef = useRef<Map<number, string | null>>(
-    new Map(
-      initialBerichten
-        .filter(b => b.image != null)
-        .map(b => [b.id, b.image]),
-    ),
-  );
 
   const active: SlideItem[] = useMemo(
     () => berichten.filter(b => b.active).flatMap(splitBericht),
@@ -195,27 +184,20 @@ export default function Slideshow({
   );
 
   const applyBerichten = useCallback((data: Bericht[], isPush: boolean) => {
-    // Herstel images uit de lokale cache voor lite-responses (image === null)
-    const merged = data.map(b => ({
-      ...b,
-      image: b.image ?? imageMapRef.current.get(b.id) ?? null,
-    }));
-    // Sla eventuele nieuwe images op in de cache
-    merged.forEach(b => { if (b.image) imageMapRef.current.set(b.id, b.image); });
-
     berichtenFpRef.current = fingerprint(data);
-    setBerichten(merged);
+    setBerichten(data);
     if (isPush) setAnimationEpoch(e => e + 1);
   }, []);
 
   const fetchBerichten = useCallback(async () => {
     try {
-      // Lite-poll: geen base64-afbeeldingen. ETag geeft 304 als data ongewijzigd is.
+      // Poll inclusief images (Cloudinary-URLs, ~80 chars — geen bandbreedteprobleem).
+      // ETag geeft 304 als data ongewijzigd is.
       const headers: HeadersInit = etagRef.current
         ? { 'If-None-Match': etagRef.current }
         : {};
       const res = await fetch('/api/berichten', { cache: 'no-store', headers });
-      if (res.status === 304) return; // niets veranderd — stop hier
+      if (res.status === 304) return;
       if (!res.ok) return;
       const newEtag = res.headers.get('etag');
       if (newEtag) etagRef.current = newEtag;
@@ -223,29 +205,11 @@ export default function Slideshow({
       if (!json || !Array.isArray(json.berichten)) return;
 
       const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
-      const isPush   = pushedAt !== lastPushedAtRef.current;
-      const hasNewId = data.some(b => !imageMapRef.current.has(b.id));
+      const isPush = pushedAt !== lastPushedAtRef.current;
+      if (isPush) lastPushedAtRef.current = pushedAt;
 
-      if (isPush || hasNewId) {
-        // Bij push of nieuwe berichten: haal images op zodat ze direct zichtbaar zijn.
-        lastPushedAtRef.current = pushedAt;
-        try {
-          const full = await fetch('/api/berichten?images=true', { cache: 'no-store' });
-          if (full.ok) {
-            const fullJson = await full.json();
-            if (Array.isArray(fullJson?.berichten)) {
-              fullJson.berichten.forEach((b: Bericht) => {
-                if (b.image) imageMapRef.current.set(b.id, b.image);
-              });
-            }
-          }
-        } catch {}
-        applyBerichten(data, isPush);
-      } else {
-        // Geen push, geen nieuwe berichten — alleen re-renderen bij gewijzigde data.
-        const fp = fingerprint(data);
-        if (fp !== berichtenFpRef.current) applyBerichten(data, false);
-      }
+      const fp = fingerprint(data);
+      if (isPush || fp !== berichtenFpRef.current) applyBerichten(data, isPush);
     } catch {}
   }, [applyBerichten]);
 
