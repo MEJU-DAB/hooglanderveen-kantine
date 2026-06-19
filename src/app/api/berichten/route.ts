@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
 import { getCachedFeed, invalidateBerichtenCache } from '@/lib/berichtenCache';
+
+async function requireAuth(): Promise<NextResponse | null> {
+  const jar = await cookies();
+  if (jar.get('beheer_auth')?.value !== process.env.BEHEER_SECRET) {
+    return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 });
+  }
+  return null;
+}
 
 /** Lichtgewicht hash voor ETag-berekening (geen crypto nodig). */
 function makeETag(berichten: Bericht[], pushedAt: number): string {
@@ -96,6 +105,8 @@ export async function GET(req: NextRequest) {
 
 /** PATCH /api/berichten — bulk sort_order update [{id, sort_order}] */
 export async function PATCH(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   try {
     await initDb();
     const items: { id: number; sort_order: number }[] = await req.json();
@@ -111,6 +122,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const unauth = await requireAuth();
+  if (unauth) return unauth;
   try {
     await initDb();
     const body = await req.json();
