@@ -298,8 +298,15 @@ export default function Slideshow({
     return () => clearTimeout(id);
   }, []);
 
+  // DEBUG: tijdelijke state-inspector — verwijder na diagnose
+  const debugImgCount = berichten.filter(b => b.image).length;
+
   return (
     <div className="slideshow-root">
+      {/* DEBUG overlay */}
+      <div style={{ position:'fixed', top:4, right:4, zIndex:9999, background:'rgba(0,0,0,.75)', color:'#0f0', fontSize:11, padding:'2px 6px', fontFamily:'monospace', pointerEvents:'none' }}>
+        img:{debugImgCount}/{berichten.length} ep:{animationEpoch}
+      </div>
       {/* Vaste header */}
       <div className="slide-header">
         <div className="header-logo-block">
