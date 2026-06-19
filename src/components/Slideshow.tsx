@@ -166,6 +166,8 @@ export default function Slideshow({
   initialPushedAt?: number;
 }) {
   const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
+  // DEBUG: raw fetch log
+  const [dbgLog, setDbgLog] = useState('');
   // animationEpoch stijgt bij elke push-reset; verandert de React key op slides
   // zodat ze opnieuw worden gemount en de CSS-animatie herstart vanuit frame 0.
   const [animationEpoch, setAnimationEpoch] = useState(0);
@@ -192,26 +194,30 @@ export default function Slideshow({
 
   const fetchBerichten = useCallback(async () => {
     try {
-      // Poll inclusief images (Cloudinary-URLs, ~80 chars — geen bandbreedteprobleem).
-      // ETag geeft 304 als data ongewijzigd is.
       const headers: HeadersInit = etagRef.current
         ? { 'If-None-Match': etagRef.current }
         : {};
       const res = await fetch('/api/berichten', { cache: 'no-store', headers });
-      if (res.status === 304) return;
-      if (!res.ok) return;
+      setDbgLog(`s:${res.status}`);
+      if (res.status === 304) { setDbgLog('304'); return; }
+      if (!res.ok) { setDbgLog(`err:${res.status}`); return; }
       const newEtag = res.headers.get('etag');
       if (newEtag) etagRef.current = newEtag;
       const json = await res.json();
-      if (!json || !Array.isArray(json.berichten)) return;
+      if (!json || !Array.isArray(json.berichten)) { setDbgLog('bad json'); return; }
 
       const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
+      const imgCount = data.filter((b: Bericht) => b.image).length;
       const isPush = pushedAt !== lastPushedAtRef.current;
       if (isPush) lastPushedAtRef.current = pushedAt;
 
       const fp = fingerprint(data);
-      if (isPush || fp !== berichtenFpRef.current) applyBerichten(data, isPush);
-    } catch {}
+      const fpChanged = fp !== berichtenFpRef.current;
+      setDbgLog(`s:200 api-img:${imgCount}/${data.length} push:${isPush?1:0} fpΔ:${fpChanged?1:0}`);
+      if (isPush || fpChanged) applyBerichten(data, isPush);
+    } catch (e) {
+      setDbgLog(`catch:${String(e).slice(0,40)}`);
+    }
   }, [applyBerichten]);
 
   useEffect(() => {
@@ -304,8 +310,8 @@ export default function Slideshow({
   return (
     <div className="slideshow-root">
       {/* DEBUG overlay */}
-      <div style={{ position:'fixed', top:4, right:4, zIndex:9999, background:'rgba(0,0,0,.75)', color:'#0f0', fontSize:11, padding:'2px 6px', fontFamily:'monospace', pointerEvents:'none' }}>
-        img:{debugImgCount}/{berichten.length} ep:{animationEpoch}
+      <div style={{ position:'fixed', top:4, right:4, zIndex:9999, background:'rgba(0,0,0,.75)', color:'#0f0', fontSize:11, padding:'2px 6px', fontFamily:'monospace', pointerEvents:'none', maxWidth:320 }}>
+        img:{debugImgCount}/{berichten.length} ep:{animationEpoch}<br/>{dbgLog}
       </div>
       {/* Vaste header */}
       <div className="slide-header">
