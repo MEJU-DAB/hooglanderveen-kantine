@@ -166,8 +166,6 @@ export default function Slideshow({
   initialPushedAt?: number;
 }) {
   const [berichten, setBerichten] = useState<Bericht[]>(initialBerichten);
-  // DEBUG: raw fetch log
-  const [dbgLog, setDbgLog] = useState('');
   // animationEpoch stijgt bij elke push-reset; verandert de React key op slides
   // zodat ze opnieuw worden gemount en de CSS-animatie herstart vanuit frame 0.
   const [animationEpoch, setAnimationEpoch] = useState(0);
@@ -198,26 +196,20 @@ export default function Slideshow({
         ? { 'If-None-Match': etagRef.current }
         : {};
       const res = await fetch('/api/berichten', { cache: 'no-store', headers });
-      setDbgLog(`s:${res.status}`);
-      if (res.status === 304) { setDbgLog('304'); return; }
-      if (!res.ok) { setDbgLog(`err:${res.status}`); return; }
+      if (res.status === 304) return;
+      if (!res.ok) return;
       const newEtag = res.headers.get('etag');
       if (newEtag) etagRef.current = newEtag;
       const json = await res.json();
-      if (!json || !Array.isArray(json.berichten)) { setDbgLog('bad json'); return; }
+      if (!json || !Array.isArray(json.berichten)) return;
 
       const { berichten: data, pushedAt }: { berichten: Bericht[]; pushedAt: number } = json;
-      const imgCount = data.filter((b: Bericht) => b.image).length;
       const isPush = pushedAt !== lastPushedAtRef.current;
       if (isPush) lastPushedAtRef.current = pushedAt;
 
       const fp = fingerprint(data);
-      const fpChanged = fp !== berichtenFpRef.current;
-      setDbgLog(`s:200 api-img:${imgCount}/${data.length} push:${isPush?1:0} fpΔ:${fpChanged?1:0}`);
-      if (isPush || fpChanged) applyBerichten(data, isPush);
-    } catch (e) {
-      setDbgLog(`catch:${String(e).slice(0,40)}`);
-    }
+      if (isPush || fp !== berichtenFpRef.current) applyBerichten(data, isPush);
+    } catch {}
   }, [applyBerichten]);
 
   useEffect(() => {
@@ -304,15 +296,8 @@ export default function Slideshow({
     return () => clearTimeout(id);
   }, []);
 
-  // DEBUG: tijdelijke state-inspector — verwijder na diagnose
-  const debugImgCount = berichten.filter(b => b.image).length;
-
   return (
     <div className="slideshow-root">
-      {/* DEBUG overlay */}
-      <div style={{ position:'fixed', top:4, right:4, zIndex:9999, background:'rgba(0,0,0,.75)', color:'#0f0', fontSize:11, padding:'2px 6px', fontFamily:'monospace', pointerEvents:'none', maxWidth:320 }}>
-        img:{debugImgCount}/{berichten.length} ep:{animationEpoch}<br/>{dbgLog}
-      </div>
       {/* Vaste header */}
       <div className="slide-header">
         <div className="header-logo-block">
