@@ -10,9 +10,9 @@ import TextAlign from '@tiptap/extension-text-align';
 import TiptapLink from '@tiptap/extension-link';
 import CharacterCount from '@tiptap/extension-character-count';
 import Placeholder from '@tiptap/extension-placeholder';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Bericht } from '@/lib/types';
 import { splitContent, stripTags } from '@/lib/splitContent';
-import { AutoFitSlide } from '@/components/AutoFitSlide';
 
 /* ── SVG Icons ── */
 const Icons = {
@@ -135,19 +135,6 @@ const Icons = {
       <path d="M21 12a9 9 0 01-9 9"/>
     </svg>
   ),
-  archive: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="21 8 21 21 3 21 3 8"/>
-      <rect x="1" y="3" width="22" height="5"/>
-      <line x1="10" y1="12" x2="14" y2="12"/>
-    </svg>
-  ),
-  restore: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="1 4 1 10 7 10"/>
-      <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-    </svg>
-  ),
   calendar: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -171,7 +158,6 @@ function fmtExpiry(s: string) {
   } catch { return s; }
 }
 
-/** Converteert DB-datetime ("2024-06-17 14:30:00") naar datetime-local waarde ("2024-06-17T14:30") */
 function toDatetimeLocal(s: string | null | undefined): string {
   if (!s) return '';
   return s.replace(' ', 'T').slice(0, 16);
@@ -183,7 +169,7 @@ function ExpiryBadge({ expires_at }: { expires_at?: string | null }) {
   const d = new Date(expires_at.replace(' ', 'T'));
   const now = new Date();
   const diff = d.getTime() - now.getTime();
-  if (diff <= 0) return null; // al gearchiveerd door API
+  if (diff <= 0) return null;
   const soon = diff < 48 * 60 * 60 * 1000;
   return (
     <span className={`expiry-badge${soon ? ' expiry-soon' : ''}`}>
@@ -251,13 +237,11 @@ async function compressImage(
       if (!ctx) { reject(new Error('Canvas niet beschikbaar')); return; }
       ctx.drawImage(img, 0, 0, width, height);
       const compressed = canvas.toDataURL('image/jpeg', 0.82);
-      // base64-lengte → bytes: elke 4 base64-chars ≈ 3 bytes
       const b64 = compressed.split(',')[1] ?? '';
       const compressedBytes = Math.round(b64.length * 3 / 4);
       const compressedKb = Math.round(compressedBytes / 1024);
 
       if (compressedBytes >= file.size) {
-        // Gecomprimeerde versie is groter (bijv. kleine PNG) — gebruik origineel
         const reader = new FileReader();
         reader.onload = e => resolve({ dataUrl: e.target!.result as string, originalKb, compressedKb: originalKb });
         reader.onerror = () => reject(new Error('Leesfout'));
@@ -295,7 +279,6 @@ function ImageUpload({ value, onChange }: { value: string | null; onChange: (v: 
         return;
       }
 
-      // Upload naar Cloudinary; val terug op base64 als dat niet lukt.
       let imageValue = dataUrl;
       try {
         const up = await fetch('/api/admin/upload-image', {
@@ -529,6 +512,13 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
   const bodyAuto  = fontSizeOverride  === 0;
   const titleAuto = titleSizeOverride === 0;
 
+  const titleStyle: React.CSSProperties = titleSizeOverride > 0
+    ? { fontSize: `${titleSizeOverride}rem` }
+    : { fontSize: 'clamp(2.2rem, 5.8vw, 8rem)' };
+  const bodyStyle: React.CSSProperties = fontSizeOverride > 0
+    ? { fontSize: `${fontSizeOverride}rem` }
+    : { fontSize: 'clamp(0.85rem, 1.6vw, 2.3rem)' };
+
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-panel" onClick={e => e.stopPropagation()}>
@@ -557,7 +547,8 @@ function SlidePreviewModal({ title, content, image, fontSizeOverride, titleSizeO
               <div className="slides-viewport">
                 <div className={`slide-body active${image ? ' has-image' : ''}`}>
                   <div className="slide-text-outer">
-                    <AutoFitSlide title={title || '(geen titel)'} content={content} image={image} fontSizeOverride={fontSizeOverride} titleSizeOverride={titleSizeOverride} />
+                    <div className="slide-titel" style={titleStyle}>{title || '(geen titel)'}</div>
+                    <div className="slide-inhoud" style={bodyStyle} dangerouslySetInnerHTML={{ __html: content }} />
                   </div>
                   {image && (
                     <div className="slide-img-wrap">
@@ -625,7 +616,6 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
   return (
     <form onSubmit={handleSubmit} className="bericht-form">
 
-      {/* Titel */}
       <div className="form-section">
         <label htmlFor={`${uid}-title`} className="form-label">Titel <span className="required">*</span></label>
         <input id={`${uid}-title`} className="form-input form-input-lg"
@@ -633,13 +623,11 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           placeholder="Grote kop op het nieuwsscherm" required />
       </div>
 
-      {/* Tekst */}
       <div className="form-section">
         <label className="form-label" id={`${uid}-content-label`}>Berichttekst</label>
         <RichEditor value={form.content} onChange={v => set('content', v)} />
       </div>
 
-      {/* Preview + paginaindeling */}
       {(form.title || hasContent) && (
         <div className="form-section form-preview-row">
           <button type="button" className="btn btn-blue btn-sm preview-open-btn"
@@ -664,13 +652,11 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
         />
       )}
 
-      {/* Afbeelding */}
       <div className="form-section">
         <label className="form-label">Afbeelding</label>
         <ImageUpload value={form.image} onChange={v => set('image', v)} />
       </div>
 
-      {/* Ticker */}
       <div className="form-section">
         <div className="ticker-option">
           <label className="ticker-option-label">
@@ -686,7 +672,6 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
         </div>
       </div>
 
-      {/* Weergaveduur */}
       <div className="form-section">
         <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="btn-icon-svg" style={{ width: 14, height: 14 }}>{Icons.clock}</span>
@@ -702,7 +687,6 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
         <div className="duration-hint">Standaard: {DEFAULT_DURATION}s · min. 5s · max. 60s</div>
       </div>
 
-      {/* Vervaldatum */}
       <div className="form-section">
         <label htmlFor={`${uid}-expires`} className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="btn-icon-svg" style={{ width: 14, height: 14 }}>{Icons.calendar}</span>
@@ -725,7 +709,7 @@ function BerichtForm({ initial, onSave, onCancel, saveLabel = 'Opslaan' }: {
           </button>
         )}
         <div className="expires-hint">
-          Na deze datum verdwijnt het bericht automatisch uit de slideshow en gaat het naar het archief.
+          Na deze datum verdwijnt het bericht automatisch uit de slideshow.
         </div>
       </div>
 
@@ -926,18 +910,16 @@ function RssInbox({ onPublished }: { onPublished: () => void }) {
 
 /* ── Beheer main ── */
 export default function Beheer() {
-  const [berichten, setBerichten]           = useState<Bericht[]>([]);
-  const [archivedBerichten, setArchived]    = useState<Bericht[]>([]);
-  const [archiveOpen, setArchiveOpen]       = useState(false);
-  const [toast, setToast]                   = useState({ msg: '', err: false, show: false });
-  const [editing, setEditing]               = useState<Bericht | null>(null);
-  const [newOpen, setNewOpen]               = useState(false);
-  const [flushLoading, setFlushLoading]     = useState(false);
-  const [pushLoading, setPushLoading]       = useState(false);
-  const [pushLabel, setPushLabel]           = useState<string | null>(null);
-  const [search, setSearch]                 = useState('');
-  const [activeTab, setActiveTab]           = useState<'berichten' | 'rss'>('berichten');
-  const [rssPending, setRssPending]         = useState(0);
+  const [berichten, setBerichten]       = useState<Bericht[]>([]);
+  const [toast, setToast]               = useState({ msg: '', err: false, show: false });
+  const [editing, setEditing]           = useState<Bericht | null>(null);
+  const [newOpen, setNewOpen]           = useState(false);
+  const [flushLoading, setFlushLoading] = useState(false);
+  const [pushLoading, setPushLoading]   = useState(false);
+  const [pushLabel, setPushLabel]       = useState<string | null>(null);
+  const [search, setSearch]             = useState('');
+  const [activeTab, setActiveTab]       = useState<'berichten' | 'rss'>('berichten');
+  const [rssPending, setRssPending]     = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, err = false) => {
@@ -951,18 +933,8 @@ export default function Beheer() {
       const res = await fetch('/api/berichten?images=true');
       if (!res.ok) return;
       const json = await res.json();
-      // Response is { berichten: Bericht[], pushedAt: number }
       const data = Array.isArray(json) ? json : json?.berichten;
       if (Array.isArray(data)) setBerichten(data);
-    } catch {}
-  }, []);
-
-  const fetchArchived = useCallback(async () => {
-    try {
-      const res = await fetch('/api/berichten?archived=true');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) setArchived(data);
     } catch {}
   }, []);
 
@@ -977,11 +949,10 @@ export default function Beheer() {
 
   useEffect(() => {
     fetchBerichten();
-    fetchArchived();
     fetchRssBadge();
     const id = setInterval(fetchRssBadge, 60_000);
     return () => { clearInterval(id); if (toastTimer.current) clearTimeout(toastTimer.current); };
-  }, [fetchBerichten, fetchArchived, fetchRssBadge]);
+  }, [fetchBerichten, fetchRssBadge]);
 
   const handleAdd = async (form: FormState) => {
     const res = await fetch('/api/berichten', {
@@ -1013,22 +984,6 @@ export default function Beheer() {
     showToast('Bericht verwijderd');
   };
 
-  const handleRestore = async (b: Bericht) => {
-    await fetch(`/api/berichten/${b.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ archived_at: null, expires_at: null, active: true }),
-    });
-    await Promise.all([fetchBerichten(), fetchArchived()]);
-    showToast('Bericht hersteld ✓');
-  };
-
-  const handleDeleteArchived = async (id: number) => {
-    if (!confirm('Bericht definitief verwijderen uit archief?')) return;
-    await fetch(`/api/berichten/${id}`, { method: 'DELETE' });
-    await fetchArchived();
-    showToast('Verwijderd uit archief');
-  };
-
   const handlePush = async () => {
     setPushLoading(true);
     setPushLabel(null);
@@ -1058,27 +1013,21 @@ export default function Beheer() {
     }
   };
 
-  // ── Drag & drop volgorde ──────────────────────────────────────────────
-  const dragIdx = useRef<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
-  const canDrag = !search;
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    const from = result.source.index;
+    const to   = result.destination.index;
+    if (from === to) return;
 
-  const handleDragStart = (idx: number) => { dragIdx.current = idx; };
-  const handleDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOver(idx); };
-  const handleDragEnd   = () => { dragIdx.current = null; setDragOver(null); };
-
-  const handleDrop = async (dropIdx: number) => {
-    const from = dragIdx.current;
-    if (from === null || from === dropIdx) { setDragOver(null); return; }
     const reordered = [...berichten];
     const [moved] = reordered.splice(from, 1);
-    reordered.splice(dropIdx, 0, moved);
-    setBerichten(reordered);
-    setDragOver(null);
-    dragIdx.current = null;
+    reordered.splice(to, 0, moved);
+    const withOrders = reordered.map((b, i) => ({ ...b, sort_order: i }));
+    setBerichten(withOrders);
+
     await fetch('/api/berichten', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reordered.map((b, i) => ({ id: b.id, sort_order: i }))),
+      body: JSON.stringify(withOrders.map(b => ({ id: b.id, sort_order: b.sort_order }))),
     });
   };
 
@@ -1090,12 +1039,7 @@ export default function Beheer() {
     await fetchBerichten();
   };
 
-  // ── Sortering ──────────────────────────────────────────────────────────
-  const sorted = [...berichten].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  );
-
-  const filtered = sorted.filter(b =>
+  const filtered = berichten.filter(b =>
     !search || b.title.toLowerCase().includes(search.toLowerCase()) ||
     stripTags(b.content).toLowerCase().includes(search.toLowerCase())
   );
@@ -1156,7 +1100,6 @@ export default function Beheer() {
 
         {activeTab !== 'rss' && <>
 
-        {/* Top bar */}
         <div className="dash-topbar">
           <div className="dash-topbar-title">Berichten beheren</div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1187,7 +1130,6 @@ export default function Beheer() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="dash-stats">
           <div className="dash-stat">
             <div className="dash-stat-icon dash-stat-icon--blue">{Icons.document}</div>
@@ -1219,7 +1161,6 @@ export default function Beheer() {
           </div>
         </div>
 
-        {/* Zoekbalk + sorteerkeuze */}
         <div className="dash-search-row">
           <div className="dash-search-wrap">
             <span className="dash-search-icon">{Icons.search}</span>
@@ -1238,7 +1179,6 @@ export default function Beheer() {
           <div className="dash-result-count">{filtered.length} bericht{filtered.length !== 1 ? 'en' : ''}</div>
         </div>
 
-        {/* Berichten tabel */}
         <div className="dash-card">
           {filtered.length === 0 ? (
             <div className="dash-empty">
@@ -1247,151 +1187,65 @@ export default function Beheer() {
                 {search ? 'Geen resultaten voor je zoekopdracht.' : 'Nog geen berichten. Voeg er een toe.'}
               </div>
             </div>
-          ) : (
+          ) : search ? (
+            /* Zoekresultaten: geen drag & drop */
             <div className="dash-table">
-              <div className={`dash-table-head${!canDrag ? ' no-drag' : ''}`}>
-                {canDrag && <div />}
+              <div className="dash-table-head no-drag">
                 <div>Bericht</div>
                 <div>Status</div>
                 <div>Datum</div>
                 <div>Acties</div>
               </div>
-              {filtered.map((b, idx) => (
+              {filtered.map(b => (
                 <div
                   key={b.id}
-                  className={`dash-row${b.active ? '' : ' dash-row-inactive'}${dragOver === idx ? ' drag-over' : ''}`}
-                  style={!canDrag ? { gridTemplateColumns: '1fr 160px 130px 140px', padding: '12px 16px' } : undefined}
-                  draggable={canDrag}
-                  onDragStart={() => canDrag && handleDragStart(idx)}
-                  onDragOver={e => canDrag && handleDragOver(e, idx)}
-                  onDrop={() => canDrag && handleDrop(idx)}
-                  onDragEnd={handleDragEnd}
+                  className={`dash-row${b.active ? '' : ' dash-row-inactive'}`}
+                  style={{ gridTemplateColumns: '1fr 160px 130px 140px', padding: '12px 16px' }}
                 >
-                  {canDrag && (
-                    <div className="dash-row-grip" title="Versleep om volgorde te wijzigen">{Icons.grip}</div>
-                  )}
-
-                  <div className="dash-row-info">
-                    {b.image && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="dash-row-thumb" src={b.image} alt="" />
-                    )}
-                    <div className="dash-row-text">
-                      <div className="dash-row-title">{b.title}</div>
-                      {stripTags(b.content).length > 0 && (
-                        <div className="dash-row-preview">
-                          {stripTags(b.content).slice(0, 120)}{stripTags(b.content).length > 120 ? '…' : ''}
-                        </div>
-                      )}
-                      <ExpiryBadge expires_at={b.expires_at} />
-                    </div>
-                  </div>
-
-                  <div className="dash-row-status">
-                    <label className="dash-toggle" title={b.active ? 'Klik om te verbergen' : 'Klik om te tonen'}>
-                      <input type="checkbox" checked={b.active} onChange={() => patch(b, { active: !b.active })} />
-                      <span className="dash-toggle-track" />
-                      <span className="dash-toggle-label">{b.active ? 'Zichtbaar' : 'Verborgen'}</span>
-                    </label>
-                    <label className="dash-toggle dash-toggle-yellow" title="Ticker aan/uit">
-                      <input type="checkbox" checked={b.ticker} onChange={() => patch(b, { ticker: !b.ticker })} />
-                      <span className="dash-toggle-track" />
-                      <span className="dash-toggle-label">Ticker</span>
-                    </label>
-                  </div>
-
-                  <div className="dash-row-date">
-                    <div>{fmtDate(b.created_at)}</div>
-                    <div className="dash-duration-badge" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <span style={{ width: 11, height: 11, display: 'inline-flex', flexShrink: 0 }}>{Icons.clock}</span>
-                      {b.duration ?? DEFAULT_DURATION}s
-                    </div>
-                  </div>
-
-                  <div className="dash-row-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} aria-label={`Bewerken: ${b.title}`}>
-                      <span className="btn-icon-svg">{Icons.pencil}</span>Bewerken
-                    </button>
-                    <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} aria-label={`Verwijderen: ${b.title}`}>
-                      <span className="btn-icon-svg">{Icons.trash}</span>
-                    </button>
-                  </div>
+                  <BerichtRij b={b} patch={patch} setEditing={setEditing} handleDelete={handleDelete} />
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* ── Archief ── */}
-        <div className="archive-section">
-          <button type="button" className="archive-toggle" onClick={() => setArchiveOpen(o => !o)}>
-            <span className="btn-icon-svg" style={{width:16,height:16}}>{Icons.archive}</span>
-            <span>Archief</span>
-            {archivedBerichten.length > 0 && (
-              <span className="archive-count-badge">{archivedBerichten.length}</span>
-            )}
-            <span className="archive-toggle-arrow">{archiveOpen ? '▲' : '▼'}</span>
-          </button>
-
-          {archiveOpen && (
-            archivedBerichten.length === 0 ? (
-              <div className="dash-card">
-                <div className="dash-empty">
-                  <div className="dash-empty-icon">{Icons.archive}</div>
-                  <div className="dash-empty-text">Archief is leeg.</div>
-                </div>
-              </div>
-            ) : (
-              <div className="dash-card">
-                <div className="dash-table">
-                  <div className="dash-table-head no-drag" style={{ gridTemplateColumns: '1fr 140px 200px' }}>
-                    <div>Bericht</div>
-                    <div>Gearchiveerd op</div>
-                    <div>Acties</div>
-                  </div>
-                  {archivedBerichten.map(b => (
-                    <div
-                      key={b.id}
-                      className="dash-row dash-row-inactive"
-                      style={{ gridTemplateColumns: '1fr 140px 200px', padding: '12px 16px' }}
-                    >
-                      <div className="dash-row-info">
-                        {b.image && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img className="dash-row-thumb" src={b.image} alt="" />
-                        )}
-                        <div className="dash-row-text">
-                          <div className="dash-row-title">{b.title}</div>
-                          {stripTags(b.content).length > 0 && (
-                            <div className="dash-row-preview">
-                              {stripTags(b.content).slice(0, 100)}{stripTags(b.content).length > 100 ? '…' : ''}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="dash-row-date">
-                        {b.archived_at ? fmtDate(b.archived_at) : '—'}
-                      </div>
-                      <div className="dash-row-actions">
-                        <button className="btn btn-ghost btn-sm" onClick={() => handleRestore(b)}>
-                          <span className="btn-icon-svg">{Icons.restore}</span>Herstellen
-                        </button>
-                        <button className="btn btn-red btn-sm icon-only" onClick={() => handleDeleteArchived(b.id)} aria-label={`Verwijderen: ${b.title}`}>
-                          <span className="btn-icon-svg">{Icons.trash}</span>
-                        </button>
-                      </div>
+          ) : (
+            /* Normale volgorde: drag & drop via @hello-pangea/dnd */
+            <DragDropContext onDragEnd={onDragEnd}>
+              <Droppable droppableId="berichten-list">
+                {provided => (
+                  <div className="dash-table" ref={provided.innerRef} {...provided.droppableProps}>
+                    <div className="dash-table-head">
+                      <div />
+                      <div>Bericht</div>
+                      <div>Status</div>
+                      <div>Datum</div>
+                      <div>Acties</div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )
+                    {berichten.map((b, idx) => (
+                      <Draggable key={b.id} draggableId={String(b.id)} index={idx}>
+                        {(drag, snapshot) => (
+                          <div
+                            ref={drag.innerRef}
+                            {...drag.draggableProps}
+                            className={`dash-row${b.active ? '' : ' dash-row-inactive'}${snapshot.isDragging ? ' dragging' : ''}`}
+                          >
+                            <div className="dash-row-grip" title="Versleep om volgorde te wijzigen" {...drag.dragHandleProps}>
+                              {Icons.grip}
+                            </div>
+                            <BerichtRij b={b} patch={patch} setEditing={setEditing} handleDelete={handleDelete} />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           )}
         </div>
 
         </> /* einde berichten-tab */}
       </main>
 
-      {/* ── Nieuw bericht drawer ── */}
       {newOpen && (
         <>
           <div className="drawer-overlay" onClick={() => setNewOpen(false)} />
@@ -1407,12 +1261,82 @@ export default function Beheer() {
         </>
       )}
 
-      {/* ── Bewerken drawer ── */}
       {editing && (
         <EditDrawer bericht={editing} onSave={handleEdit} onClose={() => setEditing(null)} />
       )}
 
       <Toast msg={toast.msg} err={toast.err} show={toast.show} />
     </div>
+  );
+}
+
+/* ── BerichtRij ── extracted zodat zowel draggable als search-rows het gebruiken */
+function BerichtRij({ b, patch, setEditing, handleDelete }: {
+  b: Bericht;
+  patch: (b: Bericht, changes: Partial<Bericht>) => Promise<void>;
+  setEditing: (b: Bericht) => void;
+  handleDelete: (id: number) => void;
+}) {
+  return (
+    <>
+      <div className="dash-row-info">
+        {b.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="dash-row-thumb" src={b.image} alt="" />
+        )}
+        <div className="dash-row-text">
+          <div className="dash-row-title">{b.title}</div>
+          {stripTags(b.content).length > 0 && (
+            <div className="dash-row-preview">
+              {stripTags(b.content).slice(0, 120)}{stripTags(b.content).length > 120 ? '…' : ''}
+            </div>
+          )}
+          <ExpiryBadge expires_at={b.expires_at} />
+        </div>
+      </div>
+
+      <div className="dash-row-status">
+        <label className="dash-toggle" title={b.active ? 'Klik om te verbergen' : 'Klik om te tonen'}>
+          <input type="checkbox" checked={b.active} onChange={() => patch(b, { active: !b.active })} />
+          <span className="dash-toggle-track" />
+          <span className="dash-toggle-label">{b.active ? 'Zichtbaar' : 'Verborgen'}</span>
+        </label>
+        <label className="dash-toggle dash-toggle-yellow" title="Ticker aan/uit">
+          <input type="checkbox" checked={b.ticker} onChange={() => patch(b, { ticker: !b.ticker })} />
+          <span className="dash-toggle-track" />
+          <span className="dash-toggle-label">Ticker</span>
+        </label>
+      </div>
+
+      <div className="dash-row-date">
+        <div>{fmtDate(b.created_at)}</div>
+        <div className="dash-duration-badge" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 11, height: 11, display: 'inline-flex', flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </span>
+          {b.duration ?? 10}s
+        </div>
+      </div>
+
+      <div className="dash-row-actions">
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditing(b)} aria-label={`Bewerken: ${b.title}`}>
+          <span className="btn-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </span>Bewerken
+        </button>
+        <button className="btn btn-red btn-sm icon-only" onClick={() => handleDelete(b.id)} aria-label={`Verwijderen: ${b.title}`}>
+          <span className="btn-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+            </svg>
+          </span>
+        </button>
+      </div>
+    </>
   );
 }

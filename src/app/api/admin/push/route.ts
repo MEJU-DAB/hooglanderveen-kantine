@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import db, { initDb } from '@/lib/db';
-import { invalidateBerichtenCache } from '@/lib/berichtenCache';
+import { invalideerCache } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,7 @@ export async function POST(_: NextRequest) {
     args: [String(pushedAt)],
   });
 
-  invalidateBerichtenCache();
+  invalideerCache();
 
   return NextResponse.json({ pushedAt });
 }

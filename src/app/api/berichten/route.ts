@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
-import { getCachedFeed, invalidateBerichtenCache } from '@/lib/berichtenCache';
+import { getCachedFeed, invalideerCache } from '@/lib/cache';
 
 async function requireAuth(): Promise<NextResponse | null> {
   const jar = await cookies();
@@ -12,20 +12,10 @@ async function requireAuth(): Promise<NextResponse | null> {
   return null;
 }
 
-/** Lichtgewicht hash voor ETag-berekening (geen crypto nodig). */
-function makeETag(berichten: Bericht[], pushedAt: number): string {
-  const str = `${pushedAt}|${berichten.map(b =>
-    `${b.id}:${b.active ? 1 : 0}:${b.sort_order}:${b.duration}:${b.title.slice(0, 30)}`
-  ).join(',')}`;
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 33) ^ str.charCodeAt(i)) >>> 0;
-  return `"${h.toString(36)}"`;
-}
-
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_CATEGORIES = ['nieuws', 'wedstrijd', 'selectie', 'jeugd', 'overig'] as const;
-const MAX_IMAGE_BYTES = 2_800_000; // ~2MB na base64-overhead
+const MAX_IMAGE_BYTES = 2_800_000;
 
 function clampDuration(v: unknown): number {
   return Math.max(1, Math.min(120, Number(v) || 10));
@@ -60,42 +50,33 @@ function toRow(r: Record<string, unknown>): Bericht {
 
 export async function GET(req: NextRequest) {
   try {
-    const archived    = req.nextUrl.searchParams.get('archived') === 'true';
-    // Images worden standaard meegestuurd (Cloudinary-URLs zijn kort, ~80 chars).
-    // Gebruik ?images=false om ze weg te laten indien ooit nodig.
-    const skipImages  = req.nextUrl.searchParams.get('images') === 'false';
+    const params = req.nextUrl.searchParams;
 
-    if (archived) {
+    // Gearchiveerde berichten — alleen voor beheer
+    if (params.get('archived') === 'true') {
       await initDb();
       const result = await db.execute(
         'SELECT * FROM berichten WHERE archived_at IS NOT NULL ORDER BY archived_at DESC'
       );
-      const rows = result.rows.map(r => toRow(r as Record<string, unknown>));
-      return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        result.rows.map(r => toRow(r as Record<string, unknown>)),
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
-    // Publieke feed: in-memory cache met 60s TTL (inclusief autoArchive)
     const feed = await getCachedFeed();
-    // ETag op lite-berichten (zonder image) zodat Cloudinary-URLs de hash
-    // niet beïnvloeden — de ETag signaleert alleen inhoudelijke wijzigingen.
-    const liteBerichten = feed.berichten.map(b => ({ ...b, image: null }));
-    const etag = makeETag(liteBerichten, feed.pushedAt);
 
-    // 304 Not Modified als de client al de actuele versie heeft
-    if (req.headers.get('if-none-match') === etag) {
-      return new NextResponse(null, {
-        status: 304,
-        headers: { 'ETag': etag, 'Cache-Control': 's-maxage=0, must-revalidate' },
-      });
+    // ?lite=1: alleen pushedAt — voor slideshow.js poll (minimaal data-gebruik)
+    if (params.get('lite') === '1') {
+      return NextResponse.json(
+        { pushedAt: feed.pushedAt },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
-    // Stuur altijd images mee: Cloudinary-URLs zijn kort (~80 chars) en
-    // veroorzaken geen bandbreedteprobleem meer. ?images=false voor beheer
-    // dat de zware archiefquery doet.
-    const berichten = skipImages ? liteBerichten : feed.berichten;
     return NextResponse.json(
-      { berichten, pushedAt: feed.pushedAt },
-      { headers: { 'Cache-Control': 's-maxage=0, must-revalidate', 'ETag': etag } },
+      { berichten: feed.berichten, pushedAt: feed.pushedAt },
+      { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (e) {
     console.error('[GET /api/berichten]', e);
@@ -113,7 +94,7 @@ export async function PATCH(req: NextRequest) {
     for (const { id, sort_order } of items) {
       await db.execute({ sql: 'UPDATE berichten SET sort_order = ? WHERE id = ?', args: [sort_order, id] });
     }
-    invalidateBerichtenCache();
+    invalideerCache();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[PATCH /api/berichten]', e);
@@ -156,7 +137,7 @@ export async function POST(req: NextRequest) {
     });
 
     const row = await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(result.lastInsertRowid)] });
-    invalidateBerichtenCache();
+    invalideerCache();
     return NextResponse.json(toRow(row.rows[0] as Record<string, unknown>), { status: 201 });
   } catch (e) {
     console.error('[POST /api/berichten]', e);

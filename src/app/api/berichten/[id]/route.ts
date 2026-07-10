@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db, { initDb } from '@/lib/db';
 import { Bericht } from '@/lib/types';
-import { invalidateBerichtenCache } from '@/lib/berichtenCache';
+import { invalideerCache } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +105,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     const u = (await db.execute({ sql: 'SELECT * FROM berichten WHERE id = ?', args: [Number(id)] })).rows[0] as Record<string, unknown>;
-    invalidateBerichtenCache();
+    invalideerCache();
     return NextResponse.json(toRow(u));
   } catch (e) {
     console.error('[PUT /api/berichten/[id]]', e);
@@ -118,7 +118,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     await initDb();
     const { id } = await params;
     await db.execute({ sql: 'DELETE FROM berichten WHERE id = ?', args: [Number(id)] });
-    invalidateBerichtenCache();
+    invalideerCache();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[DELETE /api/berichten/[id]]', e);

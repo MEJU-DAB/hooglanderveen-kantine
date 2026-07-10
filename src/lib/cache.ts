@@ -1,14 +1,16 @@
-import db, { initDb } from '@/lib/db';
-import { Bericht } from '@/lib/types';
+import db, { initDb } from './db';
+import { Bericht } from './types';
 
-const TTL_MS = 60_000; // 60 seconden
+const TTL = 60_000;
 
-type CacheEntry = { data: Bericht[]; pushedAt: number; fetchedAt: number };
-let cache: CacheEntry | null = null;
+type Entry = { data: Bericht[]; pushedAt: number; ts: number };
+let cache: Entry | null = null;
 
+const ALLOWED_CATEGORIES = ['nieuws', 'wedstrijd', 'selectie', 'jeugd', 'overig'] as const;
 function sanitizeCategory(v: unknown): Bericht['category'] {
-  const ALLOWED = ['nieuws', 'wedstrijd', 'selectie', 'jeugd', 'overig'] as const;
-  return ALLOWED.includes(v as Bericht['category']) ? (v as Bericht['category']) : 'nieuws';
+  return ALLOWED_CATEGORIES.includes(v as Bericht['category'])
+    ? (v as Bericht['category'])
+    : 'nieuws';
 }
 
 function toRow(r: Record<string, unknown>): Bericht {
@@ -30,10 +32,12 @@ function toRow(r: Record<string, unknown>): Bericht {
   };
 }
 
-async function fetchFromDb(): Promise<{ data: Bericht[]; pushedAt: number }> {
+export async function getCachedFeed(): Promise<{ berichten: Bericht[]; pushedAt: number }> {
+  const now = Date.now();
+  if (cache && now - cache.ts < TTL) return { berichten: cache.data, pushedAt: cache.pushedAt };
+
   await initDb();
 
-  // Auto-archiveer verlopen berichten
   await db.execute(
     `UPDATE berichten
      SET archived_at = datetime('now','localtime')
@@ -42,26 +46,17 @@ async function fetchFromDb(): Promise<{ data: Bericht[]; pushedAt: number }> {
        AND archived_at IS NULL`
   );
 
-  const [berichtenResult, configResult] = await Promise.all([
+  const [br, cfg] = await Promise.all([
     db.execute('SELECT * FROM berichten WHERE archived_at IS NULL ORDER BY sort_order ASC, id ASC'),
     db.execute("SELECT value FROM config WHERE key = 'last_pushed_at'"),
   ]);
 
-  const data = berichtenResult.rows.map(r => toRow(r as Record<string, unknown>));
-  const pushedAt = Number(configResult.rows[0]?.value ?? 0);
-  return { data, pushedAt };
-}
-
-export async function getCachedFeed(): Promise<{ berichten: Bericht[]; pushedAt: number }> {
-  const now = Date.now();
-  if (cache && now - cache.fetchedAt < TTL_MS) {
-    return { berichten: cache.data, pushedAt: cache.pushedAt };
-  }
-  const { data, pushedAt } = await fetchFromDb();
-  cache = { data, pushedAt, fetchedAt: now };
+  const data = br.rows.map(r => toRow(r as Record<string, unknown>));
+  const pushedAt = Number(cfg.rows[0]?.value ?? 0);
+  cache = { data, pushedAt, ts: now };
   return { berichten: data, pushedAt };
 }
 
-export function invalidateBerichtenCache(): void {
+export function invalideerCache(): void {
   cache = null;
 }

@@ -32,11 +32,12 @@ export async function GET(
       const upstream = await fetch(image, { cache: 'no-store' });
       if (!upstream.ok) return new NextResponse(null, { status: 502 });
       const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
-      const buffer = await upstream.arrayBuffer();
-      return new NextResponse(buffer, {
+      return new NextResponse(upstream.body, {
         headers: {
           'Content-Type': contentType,
-          'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
+          // 1 week cache + 1 dag stale: afbeeldingen veranderen niet na upload.
+          // Dagelijkse CDN-refresh veroorzaakte ~10 MB/dag Fast Origin Transfer.
+          'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400',
         },
       });
     }
@@ -49,7 +50,7 @@ export async function GET(
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
+        'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400',
       },
     });
   } catch (e) {

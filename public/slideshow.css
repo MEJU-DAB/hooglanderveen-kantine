@@ -1,0 +1,310 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #082554;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Root ── */
+#scherm {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Barlow', sans-serif;
+}
+
+/* ── Header ── */
+#header {
+  flex: 0 0 88px;
+  background: #082554;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 36px;
+  gap: 16px;
+  border-bottom: 2px solid rgba(255, 214, 0, 0.25);
+}
+
+#header-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+#logo {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+#clubnaam {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 700;
+  font-size: 1.55rem;
+  color: #fff;
+  line-height: 1.1;
+  display: flex;
+  flex-direction: column;
+}
+
+#clubnaam span {
+  font-weight: 300;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#header-rechts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+
+#klok {
+  font-family: 'Bebas Neue', 'Barlow Condensed', monospace;
+  font-size: 3.2rem;
+  color: #ffd600;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+#datum {
+  font-family: 'Barlow', sans-serif;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+/* ── Slides viewport ── */
+#slides {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, #0d3d7a 0%, #1560b8 60%, #0a2d5c 100%);
+  background-image:
+    linear-gradient(150deg, #0d3d7a 0%, #1560b8 60%, #0a2d5c 100%),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.018) 0px,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 44px
+    );
+  background-blend-mode: normal;
+}
+
+/* ── Individuele slide ── */
+.slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 32px 44px;
+  gap: 36px;
+}
+
+/* Slide met afbeelding: tekst links, beeld rechts */
+.slide.met-beeld {
+  padding: 24px 36px;
+}
+
+/* ── Tekst-kolom ── */
+.slide-tekst {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ── Titel ── */
+.slide-titel {
+  font-family: 'Barlow Condensed', 'Bebas Neue', sans-serif;
+  font-weight: 900;
+  font-size: clamp(2.2rem, 5.8vw, 8rem);
+  line-height: 0.9;
+  color: #fff;
+  text-transform: uppercase;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.met-beeld .slide-titel {
+  font-size: clamp(1.6rem, 3.6vw, 5.5rem);
+  -webkit-line-clamp: 2;
+}
+
+/* ── Gele streep onder titel ── */
+.slide-titel::after {
+  content: '';
+  display: block;
+  width: clamp(40px, 6vw, 80px);
+  height: clamp(3px, 0.4vw, 6px);
+  background: #ffd600;
+  margin-top: clamp(8px, 1.2vw, 20px);
+  border-radius: 2px;
+}
+
+/* ── Bodytekst ── */
+.slide-inhoud {
+  margin-top: clamp(10px, 1.5vw, 24px);
+  font-family: 'Barlow', sans-serif;
+  font-size: clamp(0.85rem, 1.6vw, 2.3rem);
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+  word-break: break-word;
+}
+
+.met-beeld .slide-inhoud {
+  -webkit-line-clamp: 6;
+}
+
+/* Tiptap HTML stijlen */
+.slide-inhoud p { margin-bottom: 0.4em; }
+.slide-inhoud p:last-child { margin-bottom: 0; }
+.slide-inhoud strong { font-weight: 700; color: #fff; }
+.slide-inhoud em { font-style: italic; }
+.slide-inhoud h1, .slide-inhoud h2, .slide-inhoud h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  color: #ffd600;
+  margin-bottom: 0.2em;
+}
+.slide-inhoud ul, .slide-inhoud ol {
+  padding-left: 1.4em;
+  margin-bottom: 0.4em;
+}
+.slide-inhoud li { margin-bottom: 0.2em; }
+
+/* ── Afbeelding-kolom ── */
+.slide-beeld {
+  flex: 0 0 42%;
+  max-width: 42%;
+  overflow: hidden;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.slide-beeld img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Leeg-scherm ── */
+.slide.leeg {
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.leeg-icon {
+  font-size: clamp(3rem, 6vw, 8rem);
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.slide.leeg p {
+  font-family: 'Barlow', sans-serif;
+  font-size: clamp(1rem, 2vw, 2rem);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── Ticker ── */
+#ticker {
+  flex: 0 0 56px;
+  background: #082554;
+  border-top: 2px solid rgba(21, 96, 184, 0.6);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+#ticker.ticker-stil {
+  gap: 24px;
+}
+
+#ticker-label {
+  flex: 0 0 auto;
+  background: #ffd600;
+  color: #082554;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 18px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#ticker-welkom {
+  font-family: 'Barlow', sans-serif;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 0 24px;
+}
+
+#ticker-scroll {
+  flex: 1 1 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+#ticker-track {
+  display: flex;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.ticker-item {
+  font-family: 'Barlow', sans-serif;
+  font-size: clamp(0.85rem, 1.1vw, 1.15rem);
+  color: rgba(255, 255, 255, 0.88);
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticker-dot {
+  color: #ffd600;
+  font-size: 0.5em;
+  flex-shrink: 0;
+}
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

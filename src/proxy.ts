@@ -17,10 +17,6 @@ export function proxy(req: NextRequest) {
   if (pathname.startsWith('/api/berichten') && req.method === 'GET') {
     return NextResponse.next();
   }
-  // Image-proxy (GET): publiek
-  if (pathname.startsWith('/api/image/') && req.method === 'GET') {
-    return NextResponse.next();
-  }
 
   const token  = req.cookies.get('beheer_auth')?.value;
   const secret = process.env.BEHEER_SECRET;
