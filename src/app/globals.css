@@ -2042,6 +2042,25 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
   border-color: #fbbf24;
 }
 
+.clamp-waarschuwing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #92400e;
+  background: #fff7ed;
+  border: 1px solid #fbbf24;
+  cursor: default;
+}
+.clamp-waarschuwing::before {
+  content: '⚠';
+  font-size: 0.75em;
+}
+
 .expires-hint {
   font-size: 0.73rem;
   color: var(--muted);

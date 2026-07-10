@@ -1292,6 +1292,11 @@ function BerichtRij({ b, patch, setEditing, handleDelete }: {
             </div>
           )}
           <ExpiryBadge expires_at={b.expires_at} />
+          {!b.font_size && stripTags(b.content).length > 300 && (
+            <span className="clamp-waarschuwing" title="Stel een fontgrootte in via de preview om afkapping te voorkomen">
+              Tekst mogelijk afgeknipt — stel fontgrootte in via preview
+            </span>
+          )}
         </div>
       </div>
 

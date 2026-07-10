@@ -120,10 +120,20 @@ export default async function Page() {
                 </div>
               )}
               <div className="slide-tekst">
-                <h1 className="slide-titel">{b.title}</h1>
+                <h1
+                  className="slide-titel"
+                  style={b.title_size ? { fontSize: `${b.title_size}rem` } : undefined}
+                >
+                  {b.title}
+                </h1>
                 {b.content && (
                   <div
                     className="slide-inhoud"
+                    style={b.font_size ? {
+                      fontSize: `${b.font_size}rem`,
+                      WebkitLineClamp: 'unset',
+                      overflow: 'visible',
+                    } : undefined}
                     // content is Tiptap HTML van de admin — nooit van buitenaf
                     // eslint-disable-next-line react/no-danger
                     dangerouslySetInnerHTML={{ __html: b.content }}
